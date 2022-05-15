@@ -1,11 +1,21 @@
 class Controls{
-    constructor(){
+    constructor(type){
         this.forward=false;
         this.left=false;
         this.right=false;
         this.reverse=false;
+        
+        // Se type for KEYS o carro é controlável pelo teclado.
+        switch(type){
+            case "KEYS":
+                this.#addkeyboardListeners();
+                break;
+            case "DUMMY":
+                this.forward=true;
+                break;
+        }
 
-        this.#addkeyboardListeners();
+        
     }
 
     #addkeyboardListeners(){
