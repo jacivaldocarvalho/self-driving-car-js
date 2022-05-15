@@ -9,7 +9,17 @@
 </head>
 
 <body>
-    <canvas id="myContainer"></canvas>
+
+    <canvas id="carContainer"></canvas>
+    <div id="verticalButtons">
+        <button onclick="save()">Salvar</button>
+        <button onclick="discard()">Remover</button>
+    </div>
+
+    <canvas id="networkContainer"></canvas>
+
+    <script src="assets/js/visualizer.js"></script>
+    <script src="assets/js/network.js"></script>
     <script src="assets/js/sensor.js"></script>
     <script src="assets/js/utils.js"></script>
     <script src="assets/js/road.js"></script>
