@@ -11,12 +11,37 @@ class Car{
         this.friction=0.05;
         this.angle = 0;
 
+        this.sensor = new Sensor(this);
         this.controls = new Controls();
     }
 
-    update(){
+    update(roadBorders){
 
         this.#move();
+        //this.polygon = this.#createPolygon();
+        this.sensor.update(roadBorders);
+
+    }
+
+    draw(ctx){
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(-this.angle);
+
+        ctx.beginPath();
+        ctx.rect(
+            -this.width/2,
+            -this.height/2,
+            this.width,
+            this.height
+        );
+        //ctx.strokeStyle="#393a3a";
+        //ctx.stroke();
+
+        ctx.fill();
+
+        ctx.restore();
+        this.sensor.draw(ctx);
     }
 
     #move(){
@@ -65,22 +90,33 @@ class Car{
                 this.x-=Math.sin(this.angle)*this.speed;
                 this.y-=Math.cos(this.angle)*this.speed;
     }
+/*
+    #createPolygon(){
+        const points=[];
+        const rad = Math.hypot(this.width, this.height)/2;
+        const alpha = Math.atan2(this.width, this.height);
 
-    draw(ctx){
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(-this.angle);
+        points.push({
+            x: this.x-Math.sin(this.angle-alpha)*rad,
+            y: this.y-Math.cos(this.angle-alpha)*rad
+        });
 
-        ctx.beginPath();
-        ctx.rect(
-            -this.width/2,
-            -this.height/2,
-            this.width,
-            this.height
-        );
+        points.push({
+            x: this.x-Math.sin(this.angle+alpha)*rad,
+            y: this.y-Math.cos(this.angle+alpha)*rad
+        });
 
-        ctx.fill();
+        points.push({
+            x: this.x-Math.sin(Math.PI+this.angle-alpha)*rad,
+            y: this.y-Math.cos(Math.PI+this.angle-alpha)*rad
+        });
 
-        ctx.restore();
-    }
-}
+        points.push({
+            x: this.x-Math.sin(Math.PI+this.angle+alpha)*rad,
+            y: this.y-Math.cos(Math.PI+this.angle+alpha)*rad
+        });
+
+        return points;
+    } */
+
+} // fim classe.

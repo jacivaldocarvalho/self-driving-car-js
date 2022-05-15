@@ -15,10 +15,10 @@ class Road{
 
         const topLeft={x:this.left, y:this.top};
         const topRight={x:this.right, y:this.top};
-        const bottomLeft={x:this.left, y:this.top};
-        const bottomRight={x:this.right, y:this.top};
+        const bottomLeft={x:this.left, y:this.bottom};
+        const bottomRight={x:this.right, y:this.bottom};
 
-        this.bordes = [
+        this.borders = [
             [topLeft, bottomLeft],
             [topRight, bottomRight]
         ];
@@ -52,7 +52,7 @@ class Road{
         }
 
         ctx.setLineDash([]);
-        this.bordes.forEach(border => {
+        this.borders.forEach(border => {
             ctx.beginPath();
             ctx.moveTo(border[0].x, border[0].y);
             ctx.lineTo(border[1].x, border[1].y);

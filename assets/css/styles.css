@@ -1,11 +1,11 @@
 body{
     margin: 0;
-    background: darkgray;
+    background: #769c8f;
     overflow: hidden;
     text-align: center;
 }
 
 #myContainer{
-    background: lightgray;
+    background: #4d4d4d;
 }
 
