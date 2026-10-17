@@ -17,6 +17,10 @@ Networks start with random weights and biases. On each animation frame, the appl
 
 This implementation performs inference and lets the user save a selected network. It does not implement supervised learning, backpropagation, mutation, or an automated training loop. Reloading generates new random networks, except for the first car when a saved network exists.
 
+## Educational documentation
+
+Follow the [learning guide](docs/README.md) for code-based explanations of [movement, sensors, and collisions](docs/simulation.md), the [neural network](docs/neural-network.md), and [guided experiments](docs/experiments.md). The guides distinguish implemented behavior from learning algorithms that are not part of this project.
+
 ## Run locally
 
 Requirements: Git to clone the repository and a modern browser supporting Canvas, JavaScript classes with private methods, and `localStorage`.
@@ -66,6 +70,11 @@ assets/
     sensor.js        Sensor rays and obstacle readings
     utils.js         Geometry, interpolation, and color helpers
     visualizer.js    Neural network rendering
+docs/
+  README.md          Learning guide and reading order
+  simulation.md      Movement, sensors, and collision geometry
+  neural-network.md  Network structure, inference, and learning concepts
+  experiments.md     Guided observations and numerical examples
 index.html           Page and script entry point
 tests/
   core.test.cjs       Geometry, sensors, inference, and collision tests
