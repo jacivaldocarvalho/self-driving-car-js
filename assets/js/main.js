@@ -14,10 +14,17 @@ const road = new Road(carContainer.width/2, carContainer.width*0.9);
 const N=100;
 const cars=generateCars(N);
 let bestCar = cars[0];
-if(localStorage.getItem("bestBrain")){
-    bestCar.brain = JSON.parse(
-        localStorage.getItem("bestBrain")
-    );
+try {
+    const savedBrain = localStorage.getItem("bestBrain");
+    if (savedBrain !== null) {
+        const brain = JSON.parse(savedBrain);
+        if (!isValidBrain(brain, bestCar.brain)) {
+            throw new Error("Invalid network structure");
+        }
+        bestCar.brain = brain;
+    }
+} catch {
+    showStatus("Could not load the saved network. Using a new network; saved data was not changed.");
 }
 
 const traffic=[
@@ -25,17 +32,51 @@ const traffic=[
 ];
 
 
-animate();
+requestAnimationFrame(animate);
 
 // Classifica os cérebros dos melhores carros.
 function save(){
-    localStorage.setItem("bestBrain",
-    JSON.stringify(bestCar.brain));
+    try {
+        localStorage.setItem("bestBrain", JSON.stringify(bestCar.brain));
+        showStatus("Network saved. Reload to use it in the first car.");
+    } catch {
+        showStatus("Could not save the network. Browser storage may be unavailable or full.");
+    }
 }
 
 // Descarta o melhor cérebro.
 function discard(){
-    localStorage.removeItem("bestBrain");
+    try {
+        localStorage.removeItem("bestBrain");
+        showStatus("Saved network removed. Reload to start with new networks.");
+    } catch {
+        showStatus("Could not remove the saved network. Browser storage may be unavailable.");
+    }
+}
+
+function showStatus(message) {
+    document.getElementById("storageStatus").textContent = message;
+}
+
+function isValidBrain(brain, expectedBrain) {
+    const isVector = (values, length) =>
+        Array.isArray(values) && values.length === length &&
+        Array.from(values).every(Number.isFinite);
+
+    return brain !== null && typeof brain === "object" &&
+        Array.isArray(brain.levels) &&
+        brain.levels.length === expectedBrain.levels.length &&
+        Array.from(brain.levels).every((level, index) => {
+            const expected = expectedBrain.levels[index];
+            return level !== null && typeof level === "object" &&
+                isVector(level.inputs, expected.inputs.length) &&
+                isVector(level.outputs, expected.outputs.length) &&
+                isVector(level.biases, expected.biases.length) &&
+                Array.isArray(level.weights) &&
+                level.weights.length === expected.inputs.length &&
+                Array.from(level.weights).every(row =>
+                    isVector(row, expected.outputs.length));
+        });
 }
 
 // Gera N carros.
@@ -60,15 +101,15 @@ function animate(time){
     for(let i=0; i<cars.length; i++){
         cars[i].update(road.borders, traffic);
     }
-    
+
     bestCar = cars.find(
         c =>c.y==Math.min(
             ...cars.map(c=>c.y)
         )
     );
 
-    carContainer.height=window.innerHeight;
-    networkContainer.height=window.innerHeight;
+    carContainer.height=Math.max(150, window.innerHeight - 64);
+    networkContainer.height=Math.max(150, window.innerHeight - 64);
 
     carCtx.save();
     carCtx.translate(0,-bestCar.y + carContainer.height*0.7);
@@ -80,12 +121,12 @@ function animate(time){
     }
 
 
-    carCtx.globalAplha=0.2;
+    carCtx.globalAlpha=0.2;
     for(let i=0; i<cars.length; i++){
         cars[i].draw(carCtx,"#111c9c");
     }
-    carCtx.globalAplha=1;  
-    bestCar.draw(carCtx,"#111c9c",true);  
+    carCtx.globalAlpha=1;
+    bestCar.draw(carCtx,"#111c9c",true);
 
     carCtx.restore();
 

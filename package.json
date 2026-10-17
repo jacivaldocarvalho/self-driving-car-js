@@ -1,0 +1,10 @@
+{
+  "name": "self-driving-car-simulation",
+  "private": true,
+  "scripts": {
+    "test": "node --test --test-isolation=none"
+  },
+  "engines": {
+    "node": ">=22.8"
+  }
+}

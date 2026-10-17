@@ -38,12 +38,12 @@ Then open `http://127.0.0.1:8000`. Browser storage behavior for files opened thr
 
 ## Controls and saved networks
 
-The interface currently uses Portuguese button labels:
+The interface provides two actions:
 
 | Button | Action |
 | --- | --- |
-| **Salvar** (Save) | Save the current leading car's network in `localStorage` under `bestBrain`, replacing any previous saved network. |
-| **Remover** (Remove) | Remove the saved network from `localStorage`. |
+| **Save network** | Save the current leading car's network in `localStorage` under `bestBrain`, replacing any previous saved network. |
+| **Remove saved network** | Remove the saved network from `localStorage`. |
 
 Reload the page to start another run. When a saved network exists, it is loaded into the first car only; the other 99 cars keep newly randomized networks. Saving or removing a network does not restart the current run or replace the active cars' networks.
 
@@ -67,6 +67,9 @@ assets/
     utils.js         Geometry, interpolation, and color helpers
     visualizer.js    Neural network rendering
 index.html           Page and script entry point
+tests/
+  simulation.test.cjs  Simulation and persistence regression tests
+package.json         Development test command (no dependencies)
 LICENSE              MIT license
 README.md
 ```
@@ -75,7 +78,15 @@ Scripts are loaded as classic browser scripts in the order declared in `index.ht
 
 ## Validation
 
-The repository currently has no automated test suite, linter, or CI workflow. To check changes manually:
+Run the regression tests with Node.js 22.8 or later and npm:
+
+```bash
+npm test
+```
+
+No dependency installation is needed. Node.js is only needed for development tests; the browser runtime remains dependency-free. Tests execute the application scripts using Node's built-in test runner and VM, with browser APIs replaced by test doubles. They cover saved network compatibility, invalid data, unavailable storage, save/remove actions, and animation rendering settings. They do not replace visual browser checks.
+
+There is currently no linter or CI workflow. To check changes manually:
 
 1. Open the page and check the browser console for errors.
 2. Confirm that the road, cars, sensor rays, and neural network are rendered and the simulation advances.
@@ -87,10 +98,9 @@ Random networks can produce cars that remain still, reverse, or collide. Success
 
 ## Known limitations
 
-- Saved JSON is parsed without error handling or network structure validation. Invalid saved data or unavailable browser storage can prevent startup or cause button actions to fail. If saved data is invalid, remove the `bestBrain` entry through browser developer tools and reload.
-- The car transparency setting is misspelled as `globalAplha`, so the intended fading of the background cars is not applied.
-- The first animation call has no timestamp, producing an invalid initial line dash offset for the network visualization.
-- Fixed canvas widths and hidden page overflow can clip the interface on narrow screens.
+- Saving and loading require browser storage access. If loading fails or a saved network is incompatible, the simulation continues with a new network and displays a status message. Existing stored data is retained until you explicitly save or remove it.
+- Network validation checks dimensions and finite numeric values, not driving quality.
+- On narrow screens, the network visualization appears below the road; scroll to view it.
 - The simulation uses a single traffic vehicle and simplified, frame-based physics. It is an educational model, unsuitable for real vehicle control.
 
 ## Contributing
