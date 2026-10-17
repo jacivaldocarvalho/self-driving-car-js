@@ -68,8 +68,13 @@ assets/
     visualizer.js    Neural network rendering
 index.html           Page and script entry point
 tests/
-  simulation.test.cjs  Simulation and persistence regression tests
-package.json         Development test command (no dependencies)
+  core.test.cjs       Geometry, sensors, inference, and collision tests
+  simulation.test.cjs Simulation and persistence regression tests
+.github/workflows/
+  quality.yml        Automated lint and tests
+eslint.config.mjs    JavaScript error checks
+package.json         Development commands and dependencies
+package-lock.json    Locked development dependencies
 LICENSE              MIT license
 README.md
 ```
@@ -78,21 +83,27 @@ Scripts are loaded as classic browser scripts in the order declared in `index.ht
 
 ## Validation
 
-Run the regression tests with Node.js 22.8 or later and npm:
+For development checks, use Node.js 22.13 or later in the 22.x series, or Node.js 24 or later, with npm:
 
 ```bash
+npm ci
+npm run lint
 npm test
 ```
 
-No dependency installation is needed. Node.js is only needed for development tests; the browser runtime remains dependency-free. Tests execute the application scripts using Node's built-in test runner and VM, with browser APIs replaced by test doubles. They cover saved network compatibility, invalid data, unavailable storage, save/remove actions, and animation rendering settings. They do not replace visual browser checks.
+`npm ci` installs the locked development dependencies for ESLint. Node.js and these dependencies are only needed for development checks; the browser runtime remains dependency-free. ESLint uses its recommended error-detection rules, with the shared globals of the classic browser scripts declared explicitly. It does not enforce formatting.
 
-There is currently no linter or CI workflow. To check changes manually:
+Tests execute the application scripts using Node's built-in test runner and VM, with browser APIs replaced by test doubles where needed. They cover geometry, sensor readings, neural network inference, collisions, saved network compatibility, invalid data, unavailable storage, save/remove actions, and animation rendering settings. They do not replace visual browser checks.
+
+`quality.yml` runs lint and tests on Node.js 24 for pushes to `main` and `chore/educational-project-modernization`, and pull requests targeting `main`. It validates changes without deploying the site.
+
+To check changes manually:
 
 1. Open the page and check the browser console for errors.
 2. Confirm that the road, cars, sensor rays, and neural network are rendered and the simulation advances.
-3. Click **Salvar** and inspect the `bestBrain` entry in the browser's developer tools under local storage.
+3. Click **Save network** and inspect the `bestBrain` entry in the browser's developer tools under local storage.
 4. Reload and confirm that the first car receives the saved network.
-5. Click **Remover**, confirm that the storage entry disappears, and reload to start with newly randomized networks.
+5. Click **Remove saved network**, confirm that the storage entry disappears, and reload to start with newly randomized networks.
 
 Random networks can produce cars that remain still, reverse, or collide. Successful obstacle avoidance is not guaranteed.
 
