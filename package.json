@@ -1,0 +1,15 @@
+{
+  "name": "self-driving-car-simulation",
+  "private": true,
+  "scripts": {
+    "test": "node --test --test-isolation=none",
+    "lint": "eslint . --max-warnings=0"
+  },
+  "engines": {
+    "node": "^22.13.0 || >=24"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0"
+  }
+}

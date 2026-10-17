@@ -5,18 +5,21 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="assets/css/styles.css">
-    <title>Auto condução usando ANNs e ML</title>
+    <title>Self-Driving Car Simulation</title>
 </head>
 
 <body>
 
-    <canvas id="carContainer"></canvas>
-    <div id="verticalButtons">
-        <button onclick="save()">Salvar</button>
-        <button onclick="discard()">Remover</button>
-    </div>
+    <p id="storageStatus" role="status" aria-live="polite"></p>
+    <main id="simulation" aria-label="Driving simulation">
+        <canvas id="carContainer" aria-label="Road and cars"></canvas>
+        <div id="verticalButtons">
+            <button onclick="save()">Save network</button>
+            <button onclick="discard()">Remove saved network</button>
+        </div>
 
-    <canvas id="networkContainer"></canvas>
+        <canvas id="networkContainer" aria-label="Leading car neural network"></canvas>
+    </main>
 
     <script src="assets/js/visualizer.js"></script>
     <script src="assets/js/network.js"></script>

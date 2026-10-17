@@ -1,0 +1,80 @@
+# Neural network: from sensors to controls
+
+[Learning guide](README.md) · [Previous: simulation](simulation.md) · [Next: experiments](experiments.md)
+
+## Feedforward structure
+
+A feedforward network passes values through successive layers. Each output combines weighted inputs with a bias convention and an activation function. Outputs from one layer become inputs to the next. For the general model, see Poole and Mackworth's [Feedforward Neural Networks](https://www.cs.ubc.ca/~poole/aibook/3e/html/ArtInt3e.Ch8.S1.html).
+
+In this repository, [Car](../assets/js/car.js) constructs `NeuralNetwork([this.sensor.rayCount, 6, 4])`. With the default five rays, the shape is:
+
+```mermaid
+flowchart LR
+    A[5 proximity inputs] --> B[6 binary hidden units]
+    B --> C[4 binary control outputs]
+```
+
+[network.js](../assets/js/network.js) represents this as two `Level` objects: one for `5 -> 6` and one for `6 -> 4`. The five input values are the input layer, but do not require a separate `Level` object.
+
+| Level | Weight matrix: inputs × outputs | Biases |
+| --- | --- | --- |
+| Sensor to hidden | `5 × 6` | `6` |
+| Hidden to control | `6 × 4` | `4` |
+
+There are `30 + 24 = 54` weights and `6 + 4 = 10` biases: 64 parameters in total. Input and output arrays store the latest activity; they are not additional parameters.
+
+## Inputs and output meanings
+
+`Car.update()` maps each sensor reading to a proximity input: `0` for a missing reading and `1 - offset` for a hit. Values nearer `1` indicate a nearby intersection along that ray. These values are normalized geometric distances, not probabilities or object labels. See the [sensor equations](simulation.md#sensor-rays).
+
+The four outputs have a fixed order:
+
+| Output index | Control field | Effect when active |
+| --- | --- | --- |
+| `0` | `forward` | Increase speed |
+| `1` | `left` | Turn left while moving |
+| `2` | `right` | Turn right while moving |
+| `3` | `reverse` | Decrease speed |
+
+The outputs are independent binary values, not a single winning class. Opposing controls can both activate; the movement code processes both. The network does not directly predict a lane, steering angle, velocity, or collision probability.
+
+## Weighted sums and the threshold convention
+
+For each output unit `j`, `Level.feedForward()` computes:
+
+```text
+sum[j] = Σ input[i] * weights[i][j]
+output[j] = 1 if sum[j] > biases[j], otherwise 0
+```
+
+For a small illustrative unit with inputs `[0.75, 0.25]`, weights `[1, -1]`, and threshold `0.25`, the sum is `0.5`, so the output is `1`. If its threshold is instead `0.5`, the output is `0`: the comparison is strictly greater, not greater than or equal.
+
+The field named `biases` acts as a threshold that is subtracted from the weighted sum. To compare with a textbook expression `activation(weightedSum + b)`, use `b = -biases[j]` and an activation that returns `1` only for positive arguments. A positive stored threshold makes activation harder.
+
+Both hidden and output units use this hard binary step. There is no sigmoid, ReLU, softmax, or confidence score in this implementation.
+
+## Initialization, inference, and learning
+
+`Level.#randomize()` initializes every weight and threshold with `Math.random() * 2 - 1`, giving values in `[-1, 1)`. Each car gets a separate network. `NeuralNetwork.feedForward()` then evaluates the two levels in sequence on every update.
+
+Inference overwrites the `inputs` and `outputs` activity arrays, but leaves weights and biases unchanged. Changing colors in the visualizer reflects current activity, not parameter learning.
+
+Parameter learning is a separate operation. For example, gradient-based learning needs an objective and parameter updates; backpropagation computes derivatives through the network. These concepts are described in the [parameter-learning section of the textbook](https://www.cs.ubc.ca/~poole/aibook/3e/html/ArtInt3e.Ch8.S1.html). The hard step used here is discontinuous at its threshold and has zero derivative away from it, so applying ordinary gradient-based training would require reconsidering that choice.
+
+The project has no loss function, target labels, reward-driven update, optimizer, or mutation method. Selecting the car with the smallest `y` is a ranking step; saving it retains its parameters. An evolutionary extension would need an explicit process for creating and evaluating new candidate parameters, which is not implemented.
+
+## Persistence and compatibility
+
+[main.js](../assets/js/main.js) saves the leader's network as JSON under `bestBrain`. Reloading applies a compatible saved model to the first car only. The other cars receive fresh random parameters, so a saved first car may not remain the leader.
+
+`isValidBrain()` compares the loaded model to a fresh network's expected dimensions. It checks the number of levels, vector and matrix sizes, and finite numeric values. Invalid data or storage access errors leave the fresh model active and show a status message. Validation does not assess driving quality.
+
+Saving serializes activity arrays as well as parameters. Once inference runs, those activity arrays are overwritten using new observations. Removing stored data affects the next startup; it does not reset the active simulation.
+
+## Reading the visualization
+
+[Visualizer](../assets/js/visualizer.js) draws connections, activity, and bias rings. [getRGBA()](../assets/js/utils.js) uses yellow for positive values, blue for negative values, and magnitude as opacity. Zero is transparent. Output arrows follow the same forward, left, right, reverse order used by the controls.
+
+The visualization shows the current leader's network. Since the leader can change, comparing two frames does not necessarily compare the same controller. To observe parameter stability, inspect a fixed car as shown in the [experiments](experiments.md#3-observe-activity-without-parameter-learning).
+
+The [core tests](../tests/core.test.cjs) check layer dimensions, propagation, and the strict threshold rule. The [simulation tests](../tests/simulation.test.cjs) cover saved model compatibility and storage failures.
