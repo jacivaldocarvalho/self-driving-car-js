@@ -1,100 +1,108 @@
-# **Carro Autônomo com Redes Neurais e Machine Learning usando JavaScript**
+# Self-Driving Car Simulation in JavaScript
 
-Este projeto visa criar uma aplicação simulando um carro autônomo que utiliza **Redes Neurais Artificiais (ANNs)** e **Aprendizado de Máquina (ML)** para identificar e contornar obstáculos em uma estrada. Desenvolvido utilizando **JavaScript**, **HTML5**, e **CSS3**, este repositório explora como podemos usar aprendizado de máquina para treinar um carro autônomo virtual, com base em sensores artificiais para simular a interação com o ambiente.
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-## **Índice**
+An educational browser simulation of cars controlled by a small artificial neural network. Built with plain JavaScript, HTML5 Canvas, and CSS, it demonstrates vehicle movement, ray-based sensors, collision detection, and neural network inference without external libraries.
 
-- [Objetivo do Projeto](#objetivo-do-projeto)
-- [Funcionalidades](#funcionalidades)
-- [Link para Visualização](#link-para-visualização)
-- [Estrutura de Arquivos](#estrutura-de-arquivos)
-- [Como Rodar o Projeto](#como-rodar-o-projeto)
-- [Evoluções Possíveis para o Projeto](#evoluções-possíveis-para-o-projeto)
-- [Contribuições](#contribuições)
-- [Contatos e Network](#contatos-e-network)
-- [Licença](#licença)
-- [Referências Bibliográficas](#referências-bibliográficas)
+[View the simulation](https://jacivaldocarvalho.github.io/carro-autonomo-js-ann-ml/)
 
-## **Objetivo do Projeto**
+## How it works
 
-O projeto tem como objetivo demonstrar a implementação de um **carro autônomo virtual** capaz de aprender a contornar obstáculos utilizando redes neurais e aprendizado de máquina. Essa é uma implementação prática de conceitos de IA, permitindo uma melhor compreensão sobre como algoritmos de aprendizado supervisionado podem ser aplicados na condução autônoma.
+The simulation starts 100 AI-controlled cars in the middle lane of a three-lane road, with one slower traffic vehicle ahead. Each AI car has five sensor rays that detect road borders and traffic. Sensor readings feed a network with five inputs, six hidden neurons, and four binary outputs: forward, left, right, and reverse.
 
-## **Funcionalidades**
-- Simulação de uma estrada com tráfego e obstáculos.
-- Carro autônomo treinado para detectar e desviar de obstáculos.
-- Implementação de **Redes Neurais Artificiais (ANNs)** para aprendizado de como o carro deve se comportar na estrada.
-- Integração de **Machine Learning (ML)** para treinamento e aperfeiçoamento das ações do carro.
+Networks start with random weights and biases. On each animation frame, the application updates vehicle movement, checks collisions, and selects the car with the smallest vertical coordinate as the leading car. The camera follows that car, and a second canvas displays its network. A damaged car stops moving.
 
-## **Link para Visualização**
+This implementation performs inference and lets the user save a selected network. It does not implement supervised learning, backpropagation, mutation, or an automated training loop. Reloading generates new random networks, except for the first car when a saved network exists.
 
-Você pode visualizar a simulação do carro autônomo em funcionamento diretamente através do seguinte link:
+## Run locally
 
-[**Acesse o site - Carro Autônomo**](https://jacivaldocarvalho.github.io/carro-autonomo-js-ann-ml/)
-
-## **Estrutura de Arquivos**
-
-A estrutura do repositório é a seguinte:
+Requirements: Git to clone the repository and a modern browser supporting Canvas, JavaScript classes with private methods, and `localStorage`.
 
 ```bash
-├── assets/                   # Arquivos de mídia e imagens para o projeto
-├── index.html                # Arquivo HTML principal da aplicação
-├── LICENSE                   # Arquivo de licença do projeto (MIT)
-├── README.md                 # Este arquivo de documentação
-├── script.js                 # Lógica do carro autônomo em JavaScript
-├── style.css                 # Estilos da página e da simulação
+git clone https://github.com/jacivaldocarvalho/carro-autonomo-js-ann-ml.git
+cd carro-autonomo-js-ann-ml
 ```
 
-## **Como Rodar o Projeto**
+Open `index.html` in your browser. There are no dependencies to install, environment variables to configure, or build commands to run.
 
-1. **Clonar o Repositório**:
+For a consistent browser origin when saving networks, serve the directory over HTTP. If Python 3 is already installed, an optional local server is:
 
-   Clone o repositório para sua máquina local com o seguinte comando:
+```bash
+python3 -m http.server 8000 --bind 127.0.0.1
+```
 
-   ```bash
-   git clone https://github.com/jacivaldocarvalho/carro-autonomo-js-ann-ml.git
-   ```
+Then open `http://127.0.0.1:8000`. Browser storage behavior for files opened through `file://` can vary.
 
-2. **Abrir o Arquivo HTML**:
+## Controls and saved networks
 
-   Navegue até a pasta do projeto e abra o arquivo `index.html` em seu navegador preferido para visualizar a simulação do carro autônomo.
+The interface currently uses Portuguese button labels:
 
-## **Evoluções Possíveis para o Projeto**
+| Button | Action |
+| --- | --- |
+| **Salvar** (Save) | Save the current leading car's network in `localStorage` under `bestBrain`, replacing any previous saved network. |
+| **Remover** (Remove) | Remove the saved network from `localStorage`. |
 
-### 1. **Treinamento de Redes Neurais**
-Atualmente, a rede neural pode ser aprimorada com um maior volume de dados e maior complexidade para simular cenários mais desafiadores. Integrar um modelo de aprendizado mais robusto, como redes neurais convolucionais (CNN), poderia trazer melhores resultados.
+Reload the page to start another run. When a saved network exists, it is loaded into the first car only; the other 99 cars keep newly randomized networks. Saving or removing a network does not restart the current run or replace the active cars' networks.
 
-### 2. **Aprimoramento da Simulação de Obstáculos**
-A simulação pode ser expandida para incluir obstáculos móveis, outros veículos ou diferentes tipos de condições de estrada, como chuva ou neblina.
+Saved networks belong to the browser profile and origin. Changing the host, port, or protocol uses different storage. Nothing is uploaded to a backend.
 
-### 3. **Integração com Sensores Físicos**
-Se for migrado para um ambiente físico, integrar o sistema com sensores reais, como LiDAR ou câmeras, pode trazer a aplicação para um nível mais avançado, com um carro autônomo operando no mundo real.
+Keyboard controls are implemented for cars created with the `KEYS` control type, but the default simulation creates only `AI` and `DUMMY` cars. There is no interface switch for manual driving.
 
-### 4. **Interface de Controle Manual**
-Adicionar uma interface de controle manual ao lado da automação poderia permitir ao usuário alternar entre modos autônomos e controlados manualmente.
+## Project structure
 
-### 5. **Desenvolver em Ambiente de Simulação 3D**
-Expandir o projeto para um ambiente de simulação 3D, utilizando frameworks como **three.js**, poderia proporcionar uma experiência visual mais imersiva e realista.
+```text
+assets/
+  css/
+    styles.css       Page layout and canvas styles
+  js/
+    car.js           Vehicle movement, collision checks, and drawing
+    controls.js      AI, keyboard, and traffic control state
+    main.js          Initialization, animation loop, and persistence
+    network.js       Neural network initialization and inference
+    road.js          Road geometry, lanes, and drawing
+    sensor.js        Sensor rays and obstacle readings
+    utils.js         Geometry, interpolation, and color helpers
+    visualizer.js    Neural network rendering
+index.html           Page and script entry point
+LICENSE              MIT license
+README.md
+```
 
-## **Contribuições**
+Scripts are loaded as classic browser scripts in the order declared in `index.html` and share global classes and helper functions. `main.js` creates the road and cars, starts the animation loop, and connects the page buttons to browser storage. There is no backend or build pipeline.
 
-Se você tiver sugestões de melhorias ou encontrar problemas com o script, sinta-se à vontade para abrir um **issue** ou submeter um **pull request**.
+## Validation
 
-## **Contatos e Network**
+The repository currently has no automated test suite, linter, or CI workflow. To check changes manually:
 
-- **LinkedIn**: [LinkedIn](https://www.linkedin.com/in/jacivaldocarvalho/) 👔
-- **E-mail**: [E-mail](mailto:jacivaldocarvalho@gmail.com) 📧
-- **GitHub**: [GitHub](https://github.com/jacivaldocarvalho) 🐙
-- **Medium**: [Medium](https://medium.com/@jacivaldocarvalho) ✍️
+1. Open the page and check the browser console for errors.
+2. Confirm that the road, cars, sensor rays, and neural network are rendered and the simulation advances.
+3. Click **Salvar** and inspect the `bestBrain` entry in the browser's developer tools under local storage.
+4. Reload and confirm that the first car receives the saved network.
+5. Click **Remover**, confirm that the storage entry disappears, and reload to start with newly randomized networks.
 
-Sempre aberto a novas conexões e oportunidades de aprendizado!
+Random networks can produce cars that remain still, reverse, or collide. Successful obstacle avoidance is not guaranteed.
 
-## **Licença**
+## Known limitations
 
-Este projeto está licenciado sob a [MIT License](LICENSE).
+- Saved JSON is parsed without error handling or network structure validation. Invalid saved data or unavailable browser storage can prevent startup or cause button actions to fail. If saved data is invalid, remove the `bestBrain` entry through browser developer tools and reload.
+- The car transparency setting is misspelled as `globalAplha`, so the intended fading of the background cars is not applied.
+- The first animation call has no timestamp, producing an invalid initial line dash offset for the network visualization.
+- Fixed canvas widths and hidden page overflow can clip the interface on narrow screens.
+- The simulation uses a single traffic vehicle and simplified, frame-based physics. It is an educational model, unsuitable for real vehicle control.
 
-## **Referências Bibliográficas**
+## Contributing
 
-- [Redes Neurais Artificiais - Artigo de Introdução](https://www.turing.com/kb/what-are-artificial-neural-networks-ann)
-- [Machine Learning na Web com JavaScript](https://www.tensorflow.org/js)
-- [Curso do Dr. Radu Mariescu-Istodor - Referência Principal](https://radufromfinland.com/)
-- [Introdução ao Aprendizado de Máquina](https://www.coursera.org/learn/machine-learning)
+Open an issue to discuss a bug or a focused improvement. For pull requests, describe the behavior changed and the validation performed. Keep changes consistent with the project's educational scope and dependency-free browser runtime.
+
+## References and author
+
+The main learning reference is [Radu Mariescu-Istodor's educational material](https://radufromfinland.com/).
+
+Author profiles: [GitHub](https://github.com/jacivaldocarvalho), [LinkedIn](https://www.linkedin.com/in/jacivaldocarvalho/), and [Medium](https://medium.com/@jacivaldocarvalho). Contact: [email](mailto:jacivaldocarvalho@gmail.com).
+
+## License
+
+Licensed under the [MIT License](LICENSE). See the license file for the copyright notice and terms.
