@@ -7,7 +7,7 @@
 
 An educational browser simulation of cars controlled by a small artificial neural network. Built with plain JavaScript, HTML5 Canvas, and CSS, it demonstrates vehicle movement, ray-based sensors, collision detection, and neural network inference without external libraries.
 
-[View the simulation](https://jacivaldocarvalho.github.io/carro-autonomo-js-ann-ml/)
+[View the simulation](https://jacivaldocarvalho.github.io/self-driving-car-js/)
 
 ## How it works
 
@@ -26,8 +26,8 @@ Follow the [learning guide](docs/README.md) for code-based explanations of [move
 Requirements: Git to clone the repository and a modern browser supporting Canvas, JavaScript classes with private methods, and `localStorage`.
 
 ```bash
-git clone https://github.com/jacivaldocarvalho/carro-autonomo-js-ann-ml.git
-cd carro-autonomo-js-ann-ml
+git clone https://github.com/jacivaldocarvalho/self-driving-car-js.git
+cd self-driving-car-js
 ```
 
 Open `index.html` in your browser. There are no dependencies to install, environment variables to configure, or build commands to run.
