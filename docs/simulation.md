@@ -17,6 +17,7 @@ When running, `animate()` in [main.js](../assets/js/main.js) accumulates elapsed
 1. Update traffic vehicles first, including their collision polygons.
 2. Update every AI car against the road borders and traffic polygons.
 3. Select the first car whose `y` equals the smallest `y` in the population.
+4. Increment total steps and, when enabled, record evolutionary fitness. A completed generation is replaced at the start of the next update, before traffic and cars move again.
 
 Rendering draws the road, traffic, cars, leader's sensors, and leader's neural network, then refreshes the telemetry panel. `animate()` always requests one next animation callback. While paused, it skips updates and keeps the dash animation frozen, but redraws for layout changes. **Step** performs exactly one update (1/60 s) and redraw while remaining paused. **Restart** recreates the population, applies the seed and optional saved-model loading, and resets the step counter, simulated time, and frame clock without changing the pause mode or creating another callback loop.
 
@@ -34,13 +35,13 @@ flowchart LR
     F --> A
 ```
 
-The leader is a position-based selection. There is no safety score or automatic restart, and damaged cars remain eligible. The 100 cars are processed in ordinary JavaScript loops, without worker threads. AI cars do not sense or collide with one another because the `traffic` array contains only the traffic vehicle.
+The leader is a position-based selection. There is no safety score, and damaged cars remain eligible as the position-based leader. Inference mode never automatically restarts a run; Evolution mode separately evaluates peak-distance fitness and replaces the population at generation boundaries. The 100 cars are processed in ordinary JavaScript loops, without worker threads. AI cars do not sense or collide with one another because the `traffic` array contains only the traffic vehicle.
 
 ## Repeatable initial conditions
 
 `initializeSimulation()` creates a fresh generator from the applied seed and passes it through `generateCars()` to each car's neural network. A restart with unchanged seed, saved-model input, and code version therefore recreates the same initial parameters and positions. Pending field edits do not affect an active run. Seed validation happens before replacing its population.
 
-The simulation consumes randomness during network initialization, not while moving. Compare states after equal update counts, using the same browser engine; discarded wall-clock intervals and cross-engine floating-point equality are separate concerns. See the [reproducibility exercise](experiments.md#7-repeat-a-seeded-experiment).
+The simulation consumes randomness during initial network creation and evolutionary mutation, not inside the movement equations. Compare states after equal update counts, using the same browser engine; discarded wall-clock intervals and cross-engine floating-point equality are separate concerns. See the [reproducibility exercise](experiments.md#7-repeat-a-seeded-experiment).
 
 ## Vehicle movement
 

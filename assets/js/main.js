@@ -20,15 +20,19 @@ let lastFrameTime = null;
 let accumulatedTime = 0;
 let activeExperiment;
 let savedNetworkState;
+let experimentRandom;
+let evolution;
 
 initializeSimulation();
 requestAnimationFrame(animate);
 
-function initializeSimulation(settings = { seed: 42, useSavedNetwork: true }) {
-    activeExperiment = { ...settings };
+function initializeSimulation(settings = { seed: 42, useSavedNetwork: true, evolutionMode: false }) {
+    activeExperiment = { ...settings, evolutionMode: settings.evolutionMode === true };
     document.getElementById("seedInput").value = String(settings.seed);
     document.getElementById("useSavedNetwork").checked = settings.useSavedNetwork;
-    cars = generateCars(N, createSeededRandom(settings.seed));
+    document.getElementById("evolutionMode").checked = activeExperiment.evolutionMode;
+    experimentRandom = createSeededRandom(settings.seed);
+    cars = generateCars(N, experimentRandom);
     bestCar = cars[0];
     traffic = [new Car(road.getLaneCenter(1), -100, 30, 50, "DUMMY", 2)];
     simulationSteps = 0;
@@ -50,8 +54,9 @@ function initializeSimulation(settings = { seed: 42, useSavedNetwork: true }) {
             showStatus("Could not load the saved network. Using a new network; saved data was not changed.");
         }
     }
+    evolution = activeExperiment.evolutionMode ? new Evolution(cars, experimentRandom) : null;
     document.getElementById("activeExperiment").textContent =
-        `Active seed: ${settings.seed} · Saved network at restart: ${savedNetworkState}`;
+        `Active seed: ${settings.seed} · Saved network at restart: ${savedNetworkState} · Mode: ${evolution ? "Evolution" : "Inference"}`;
     updateTelemetry();
 }
 
@@ -66,6 +71,19 @@ function save() {
         showStatus("Network saved. Enable Use saved network and restart to use it in the first car.");
     } catch {
         showStatus("Could not save the network. Browser storage may be unavailable or full.");
+    }
+}
+
+function saveChampion() {
+    if (!evolution || !evolution.champion) {
+        showStatus("Complete an evolution generation before saving a champion.");
+        return;
+    }
+    try {
+        localStorage.setItem("bestBrain", JSON.stringify(evolution.champion.brain));
+        showStatus(`Champion from generation ${evolution.champion.generation} saved. Enable Use saved network and restart to load it.`);
+    } catch {
+        showStatus("Could not save the champion. Browser storage may be unavailable or full.");
     }
 }
 
@@ -134,7 +152,11 @@ function readExperimentSettings() {
     if (!/^\d+$/.test(rawSeed) || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
         return null;
     }
-    return { seed, useSavedNetwork: document.getElementById("useSavedNetwork").checked };
+    return {
+        seed,
+        useSavedNetwork: document.getElementById("useSavedNetwork").checked,
+        evolutionMode: document.getElementById("evolutionMode").checked
+    };
 }
 
 function updateExperimentSettings() {
@@ -143,7 +165,8 @@ function updateExperimentSettings() {
     if (settings === null) {
         message = "Enter a whole-number seed from 0 to 4294967295. The active run is unchanged.";
     } else if (settings.seed !== activeExperiment.seed ||
-               settings.useSavedNetwork !== activeExperiment.useSavedNetwork) {
+               settings.useSavedNetwork !== activeExperiment.useSavedNetwork ||
+               settings.evolutionMode !== activeExperiment.evolutionMode) {
         message = "Pending changes — click Restart to apply.";
     }
     const status = document.getElementById("experimentStatus");
@@ -161,7 +184,18 @@ function restartSimulation() {
     renderSimulation();
 }
 
+function startNextGeneration() {
+    const brains = evolution.createNextBrains(N);
+    // The constructor needs a network; neutral initialization consumes no experiment randomness.
+    cars = generateCars(N, () => 0.5);
+    cars.forEach((car, index) => { car.brain = brains[index]; });
+    bestCar = cars[0];
+    traffic = [new Car(road.getLaneCenter(1), -100, 30, 50, "DUMMY", 2)];
+    evolution.startNext(cars);
+}
+
 function updateSimulation() {
+    if (evolution && evolution.completed) startNextGeneration();
     // Define os obstáculos para o tráfego.
     for (const vehicle of traffic) vehicle.update(road.borders, []);
     // Gera o tráfego dos carros.
@@ -169,6 +203,7 @@ function updateSimulation() {
     bestCar = cars.reduce((leader, car) => car.y < leader.y ? car : leader);
     simulationSteps++;
     lastAnimationTime = simulationSteps * FIXED_STEP_MS;
+    if (evolution) evolution.observe(cars);
 }
 
 function updateTelemetry() {
@@ -177,6 +212,23 @@ function updateTelemetry() {
         const element = document.getElementById(id);
         if (element.textContent !== text) element.textContent = text;
     };
+    document.getElementById("evolutionPanel").hidden = !evolution;
+    document.getElementById("saveChampionButton").disabled = !evolution || !evolution.champion;
+    setText("learningMode", evolution
+        ? "Evolution enabled — parameters change between generations."
+        : "Inference only — parameters are not being trained.");
+    if (evolution) {
+        setText("generationState", `Generation ${evolution.generation} · Step ${evolution.steps}/${Evolution.GENERATION_STEPS} · ${evolution.completed ? "Complete" : "Evaluating"}`);
+        setText("generationProgress", `Current peak progress: ${Math.max(...evolution.fitness).toFixed(2)} units · Active cars: ${cars.filter(car => !car.damaged).length}/${N}`);
+        const result = evolution.lastResult;
+        setText("generationResult", result
+            ? `Last completed: generation ${result.generation}, ${result.distance.toFixed(2)} units (${result.reason})`
+            : "Last completed: —");
+        const champion = evolution.champion;
+        setText("championStatus", champion
+            ? `Best completed progress: ${champion.distance.toFixed(2)} units · Generation ${champion.generation} · Car ${champion.carIndex + 1} · ${champion.survived ? "Survived" : "Damaged"}`
+            : "Best completed progress: —");
+    }
     setText("pauseButton", paused ? "Resume" : "Pause");
     document.getElementById("stepButton").disabled = !paused;
     setText("simulationState", `${paused ? "Paused" : "Running"} · Step ${simulationSteps}`);

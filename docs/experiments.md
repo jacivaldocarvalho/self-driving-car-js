@@ -2,7 +2,7 @@
 
 [Learning guide](README.md) · [Previous: neural network](neural-network.md)
 
-These exercises connect observations to the code. The console examples create separate objects or inspect existing cars; they do not edit source files, replace the active controller, or change saved browser data. Run them in the developer console of the simulation page after it has rendered.
+These exercises connect observations to the code. The console examples create separate objects or inspect existing cars; they do not edit source files, replace the active controller, or change saved browser data. Run them in the developer console of the simulation page after it has rendered. Use Inference mode for exercises 1–8 unless a step says otherwise.
 
 For automated checks, follow the development setup in the [project README](../README.md#validation). Each experiment links to related tests where applicable.
 
@@ -74,7 +74,7 @@ Inspect a fixed car rather than `bestCar`, because the leader can change. Keep t
 }
 ```
 
-Expected: `Parameters unchanged: true`, unless you independently modify that car's parameters. Sensor observations and activation arrays may change, but parameter updates are absent. A stationary or damaged car may also show little visible activity. In a background tab, callbacks may be delayed or paused.
+Expected: `Parameters unchanged: true`, unless you independently modify that car's parameters. Across an evolutionary generation transition, the old car object is replaced; retaining a reference to it does not inspect the new population. Sensor observations and activation arrays may change, but parameter updates are absent. A stationary or damaged car may also show little visible activity. In a background tab, callbacks may be delayed or paused.
 
 Explain why watching the leading network's changing colors is insufficient evidence of learning. See [network.js](../assets/js/network.js) and [main.js](../assets/js/main.js).
 
@@ -88,7 +88,7 @@ Explain why watching the leading network's changing colors is insufficient evide
 4. Inspect `cars[0].brain.levels` and compare its weights and biases with the saved data. Activity arrays can differ after inference.
 5. Compare `bestCar === cars[0]` in the console.
 
-Expected: the saved parameters are loaded into the first car, but another seeded car may become the leader. Saving does not mutate the remaining 99 networks or start another generation. With the same parameters and configuration, fixed steps reproduce the same simulated-time trajectory in the same browser engine. Long stalls may discard elapsed wall-clock time.
+Expected: the saved parameters are loaded into the first car, but another seeded car may become the leader. Saving itself does not mutate the remaining 99 networks or start another generation. With the same parameters and configuration, fixed steps reproduce the same simulated-time trajectory in the same browser engine. Long stalls may discard elapsed wall-clock time.
 
 **Remove saved network** removes the stored controller for the next reload; it does not reset the active cars until you restart. See the persistence cases in [simulation tests](../tests/simulation.test.cjs).
 
@@ -163,8 +163,18 @@ npm test -- --test-name-pattern='two seconds at'
 
 Expected: the four tests for 30, 60, 120, and 144 Hz pass. Each drives the real application scheduler with synthetic timestamps and checks the complete population against 120 direct updates. This tests scheduling correctness, not the physical refresh rate of your monitor. See the [fixed-step clock](simulation.md#fixed-step-clock) for recovery limits.
 
+## 9. Observe actual evolutionary progress
+
+1. Pause, set seed `42`, disable **Use saved network**, enable **Evolution mode**, and restart.
+2. Resume until the first generation completes, or advance 600 steps while paused. The first completed peak distance is about `1215.600000` canvas units for the recorded code/runtime; see [measured results](results.md).
+3. Pause at the boundary to inspect the result. The next Step starts generation 2 and performs its first update. Total simulated time continues instead of resetting.
+4. After a completed generation, click **Save champion** to retain the best completed controller. This intentionally replaces any saved `bestBrain`; skip saving if you want to preserve it.
+5. Disable Evolution mode, enable saved loading, and restart to evaluate the saved controller in the first car without further mutation.
+
+For exact generation-by-generation measurements without pausing at the right frame, run the [experiment command](usage.md#command-line-experiments). Seed `2026` demonstrates a plateau in the recorded first three generations; evolution is not guaranteed to improve every time.
+
 ## Further investigation
 
 Before changing an algorithm, state a hypothesis and choose a measurement. Examples include measuring how population size affects frame time, how sensor range changes available observations, or which geometries the edge-intersection collision method misses. Comparisons should use several recorded seeds; one successful car is not a controlled evaluation.
 
-Training, mutation, new traffic scenarios, and interpolated rendering are possible extensions. They need separate implementation and validation; none of these exercises adds them.
+More varied traffic scenarios, alternative fitness objectives, crossover, and interpolated rendering are possible extensions. They need separate implementation and validation; the current algorithm is documented in [Evolution](evolution.md).

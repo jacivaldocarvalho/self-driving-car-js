@@ -8,6 +8,31 @@ class NeuralNetwork{
         }
     }
 
+    static clone(network) {
+        return { levels: network.levels.map(level => ({
+            inputs: new Array(level.inputs.length).fill(0),
+            outputs: new Array(level.outputs.length).fill(0),
+            biases: level.biases.slice(),
+            weights: level.weights.map(row => row.slice())
+        })) };
+    }
+
+    static mutate(network, amount = 0.1, random = Math.random) {
+        if (!Number.isFinite(amount) || amount < 0 || amount > 1) {
+            throw new RangeError("Mutation amount must be between 0 and 1.");
+        }
+        if (amount === 0) return;
+        const change = value => (1 - amount) * value + amount * (random() * 2 - 1);
+        for (const level of network.levels) {
+            for (const row of level.weights) {
+                for (let j = 0; j < row.length; j++) row[j] = change(row[j]);
+            }
+            for (let j = 0; j < level.biases.length; j++) {
+                level.biases[j] = change(level.biases[j]);
+            }
+        }
+    }
+
     static feedForward(givenInputs,network){
         let outputs=Level.feedForward(
             givenInputs,network.levels[0]);

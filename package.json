@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "test": "node --test --test-isolation=none",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "experiment": "node scripts/run-experiment.cjs"
   },
   "engines": {
     "node": "^22.13.0 || >=24"

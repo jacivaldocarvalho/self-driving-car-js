@@ -5,7 +5,7 @@ const { resolve } = require('node:path');
 const vm = require('node:vm');
 
 const root = resolve(__dirname, '..');
-const scripts = ['random', 'visualizer', 'network', 'sensor', 'utils', 'road', 'controls', 'car', 'main']
+const scripts = ['random', 'visualizer', 'network', 'sensor', 'utils', 'road', 'controls', 'car', 'evolution', 'main']
     .map(name => readFileSync(resolve(root, 'assets/js', `${name}.js`), 'utf8'));
 
 function start({ saved = null, fail = null } = {}) {
@@ -498,4 +498,180 @@ test('manual Step advances simulated time once and stays frozen across paused ca
     vm.runInContext('stepSimulation()', app.context);
     assert.equal(vm.runInContext('simulationSteps', app.context), 2);
     assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.033 s');
+});
+
+
+function enableEvolution(app, seed = 42) {
+    app.elements.evolutionMode.checked = true;
+    configureExperiment(app, seed, false);
+}
+
+function parameters(brain) {
+    return JSON.stringify(brain.levels.map(level => ({ weights: level.weights, biases: level.biases })));
+}
+
+function runGenerations(app, count) {
+    return vm.runInContext(`(() => {
+        const trace = [];
+        for(let i=0;i<${count}*600 && trace.length<${count};i++) {
+            updateSimulation();
+            if(evolution.completed) trace.push({...evolution.lastResult});
+        }
+        return JSON.stringify({trace,champion:evolution.champion});
+    })()`, app.context);
+}
+
+test('evolution is off by default and inference mode never replaces the population', () => {
+    const app = start();
+    const initialCars = vm.runInContext('cars', app.context);
+    vm.runInContext('for(let i=0;i<1200;i++) updateSimulation();', app.context);
+    assert.equal(vm.runInContext('evolution', app.context), null);
+    assert.equal(vm.runInContext('cars', app.context), initialCars);
+    assert.equal(app.elements.evolutionMode.checked, false);
+    vm.runInContext('renderSimulation()', app.context);
+    assert.equal(app.elements.evolutionPanel.hidden, true);
+    assert.equal(app.elements.saveChampionButton.disabled, true);
+    assert.match(app.elements.learningMode.textContent, /Inference only/);
+});
+
+test('evolution settings remain pending until a successful restart', () => {
+    const app = start();
+    app.elements.evolutionMode.checked = true;
+    vm.runInContext('updateExperimentSettings()', app.context);
+    assert.match(app.elements.experimentStatus.textContent, /Pending changes/);
+    assert.equal(vm.runInContext('evolution', app.context), null);
+    vm.runInContext('togglePause(); restartSimulation();', app.context);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 1);
+    assert.equal(vm.runInContext('evolution.steps', app.context), 0);
+    assert.equal(vm.runInContext('paused', app.context), true);
+    assert.equal(app.elements.evolutionPanel.hidden, false);
+    assert.match(app.elements.learningMode.textContent, /Evolution enabled/);
+});
+
+test('600 updates complete a generation without automatically saving or hiding the result', () => {
+    const app = start({ saved: valid });
+    enableEvolution(app);
+    vm.runInContext('togglePause(); for(let i=0;i<599;i++) updateSimulation();', app.context);
+    const evolution = vm.runInContext('evolution', app.context);
+    assert.equal(evolution.completed, false);
+    assert.equal(evolution.champion, null);
+    vm.runInContext('stepSimulation()', app.context);
+    assert.equal(evolution.completed, true);
+    assert.equal(evolution.generation, 1);
+    assert.equal(evolution.steps, 600);
+    assert.equal(evolution.lastResult.reason, 'step limit');
+    assert.equal(vm.runInContext('simulationSteps', app.context), 600);
+    assert.equal(app.data.get('bestBrain'), valid);
+    assert.match(app.elements.generationState.textContent, /Generation 1 · Step 600\/600 · Complete/);
+    assert.equal(app.elements.saveChampionButton.disabled, false);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 10.000 s');
+});
+
+test('the next Step starts the next generation with an intact elite and reset traffic', () => {
+    const app = start();
+    enableEvolution(app);
+    vm.runInContext('togglePause(); for(let i=0;i<600;i++) updateSimulation();', app.context);
+    const champion = vm.runInContext('evolution.champion.brain', app.context);
+    const expected = parameters(champion);
+    vm.runInContext('stepSimulation()', app.context);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 2);
+    assert.equal(vm.runInContext('evolution.steps', app.context), 1);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 601);
+    assert.equal(vm.runInContext('paused', app.context), true);
+    assert.equal(parameters(vm.runInContext('cars[0].brain', app.context)), expected);
+    assert.notEqual(vm.runInContext('cars[0].brain', app.context), champion);
+    assert.equal(vm.runInContext('cars.every(car=>car.y===100 && car.speed===0 && !car.damaged)', app.context), true);
+    assert.ok(Math.abs(vm.runInContext('traffic[0].y', app.context) - (-100.15)) < 1e-10);
+    assert.equal(app.frames.length, 1);
+});
+
+test('all damaged cars end a generation early and a paused callback cannot reproduce', () => {
+    const app = start();
+    enableEvolution(app);
+    vm.runInContext('togglePause(); cars.forEach(car=>car.damaged=true); stepSimulation();', app.context);
+    assert.equal(vm.runInContext('evolution.completed', app.context), true);
+    assert.equal(vm.runInContext('evolution.lastResult.reason', app.context), 'all cars damaged');
+    app.frames.shift()(1000000);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 1);
+    vm.runInContext('stepSimulation()', app.context);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 2);
+    assert.equal(vm.runInContext('evolution.steps', app.context), 1);
+});
+
+test('the same seed reproduces three generations, mutations and champion parameters', () => {
+    const app = start();
+    enableEvolution(app, 2026);
+    const first = runGenerations(app, 3);
+    enableEvolution(app, 2026);
+    assert.equal(runGenerations(app, 3), first);
+    const recorded = JSON.parse(first);
+    assert.equal(recorded.trace.length, 3);
+    assert.ok(recorded.trace.every(result=>result.steps<=600));
+});
+
+test('saving a champion uses compatible JSON and retains its completed-generation snapshot', () => {
+    const app = start();
+    enableEvolution(app);
+    runGenerations(app, 1);
+    const expected = parameters(vm.runInContext('evolution.champion.brain', app.context));
+    vm.runInContext('saveChampion()', app.context);
+    const saved = app.data.get('bestBrain');
+    assert.equal(parameters(JSON.parse(saved)), expected);
+    assert.match(app.status.textContent, /Champion from generation 1 saved/);
+    app.elements.evolutionMode.checked = false;
+    app.elements.useSavedNetwork.checked = true;
+    vm.runInContext('restartSimulation()', app.context);
+    assert.equal(vm.runInContext('evolution', app.context), null);
+    assert.equal(parameters(vm.runInContext('cars[0].brain', app.context)), expected);
+    assert.equal(app.elements.evolutionPanel.hidden, true);
+    assert.equal(app.elements.saveChampionButton.disabled, true);
+});
+
+test('saving a champion before evaluation cannot overwrite a stored network', () => {
+    const app = start({ saved: valid });
+    vm.runInContext('saveChampion()', app.context);
+    assert.equal(app.data.get('bestBrain'), valid);
+    enableEvolution(app);
+    vm.runInContext('saveChampion()', app.context);
+    assert.equal(app.data.get('bestBrain'), valid);
+    assert.match(app.status.textContent, /Complete an evolution generation/);
+});
+
+test('champion storage failures are reported without stopping evolution', () => {
+    const app = start({ saved: valid, fail: 'setItem' });
+    enableEvolution(app);
+    runGenerations(app, 1);
+    assert.doesNotThrow(()=>vm.runInContext('saveChampion(); updateSimulation();', app.context));
+    assert.match(app.status.textContent, /Could not save the champion/);
+    assert.equal(app.data.get('bestBrain'), valid);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 2);
+});
+
+test('Restart resets evolution statistics, the RNG stream and total simulated time', () => {
+    const app = start();
+    enableEvolution(app, 42);
+    const initial = snapshot(app);
+    runGenerations(app, 2);
+    vm.runInContext('togglePause(); restartSimulation();', app.context);
+    assert.equal(snapshot(app), initial);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 1);
+    assert.equal(vm.runInContext('evolution.champion', app.context), null);
+    assert.equal(vm.runInContext('evolution.lastResult', app.context), null);
+    assert.equal(vm.runInContext('paused', app.context), true);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.000 s');
+});
+
+test('generation transitions retain fixed-step timing across 30 and 144 Hz schedules', () => {
+    const states = [];
+    for (const frequency of [30,144]) {
+        const app = start();
+        enableEvolution(app, 42);
+        app.frames.shift()(0);
+        for(let i=1;i<=frequency*11;i++) app.frames.shift()(i*1000/frequency);
+        states.push(snapshot(app));
+        assert.equal(vm.runInContext('simulationSteps', app.context), 660);
+        assert.ok(vm.runInContext('evolution.generation', app.context)>=2);
+        assert.equal(app.frames.length, 1);
+    }
+    assert.equal(states[0],states[1]);
 });

@@ -180,3 +180,14 @@ th, td {
     line-height: 1.4;
     overflow-wrap: anywhere;
 }
+
+
+#evolutionPanel {
+    border-top: 1px solid #c6d8ce;
+    border-bottom: 1px solid #c6d8ce;
+    padding-bottom: 12px;
+}
+
+#evolutionPanel h2 {
+    font-size: 1rem;
+}

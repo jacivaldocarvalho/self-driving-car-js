@@ -27,6 +27,8 @@
                     maxlength="10" value="42" aria-describedby="seedHelp" oninput="updateExperimentSettings()">
                 <label class="checkboxLabel"><input id="useSavedNetwork" type="checkbox" checked
                     onchange="updateExperimentSettings()"> Use saved network</label>
+                <label class="checkboxLabel"><input id="evolutionMode" type="checkbox"
+                    onchange="updateExperimentSettings()"> Evolution mode</label>
             </div>
             <p id="seedHelp">Whole number from 0 to 4294967295. Changes apply on Restart.</p>
             <p id="activeExperiment"></p>
@@ -38,7 +40,16 @@
             <p id="simulationState"></p>
             <p id="simulationTime"></p>
             <p id="observedCar"></p>
-            <p>Inference only — parameters are not being trained.</p>
+            <p id="learningMode">Inference only — parameters are not being trained.</p>
+            <div id="evolutionPanel" hidden>
+                <h2>Evolution</h2>
+                <p id="generationState"></p>
+                <p id="generationProgress"></p>
+                <p id="generationResult"></p>
+                <p id="championStatus"></p>
+                <p>One elite + 99 mutated copies. Maximum 600 steps per generation.</p>
+                <button id="saveChampionButton" onclick="saveChampion()" disabled>Save champion</button>
+            </div>
             <table>
                 <caption>Sensor inputs (proximity: 0–1)</caption>
                 <thead><tr><th scope="col">Ray</th><th scope="col">Input</th></tr></thead>
@@ -73,6 +84,7 @@
     <script src="assets/js/road.js"></script>
     <script src="assets/js/controls.js"></script>
     <script src="assets/js/car.js"></script>
+    <script src="assets/js/evolution.js"></script>
     <script src="assets/js/main.js"></script>
 </body>
 </html>
