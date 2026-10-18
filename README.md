@@ -177,6 +177,10 @@ Pseudo-random networks can produce cars that remain still, reverse, or collide. 
 - The clock discards elapsed time beyond its catch-up limit; simulated time may diverge from wall-clock time during slow frames or background-tab intervals. Rendering uses the latest state without interpolation.
 - The simulation uses a single traffic vehicle and simplified physics with fixed updates. It is an educational model, unsuitable for real vehicle control.
 
+## Next planned improvement
+
+The next planned improvement is a visual refresh of the application, focusing on layout, typography, colors, and the presentation of simulation controls and telemetry across desktop and mobile screens. This work is planned for a future iteration.
+
 ## Contributing
 
 Open an issue to discuss a bug or a focused improvement. For pull requests, describe the behavior changed and the validation performed. Keep changes consistent with the project's educational scope and dependency-free browser runtime.
