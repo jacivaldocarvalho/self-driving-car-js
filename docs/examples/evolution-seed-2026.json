@@ -1,0 +1,43 @@
+{
+  "algorithm": "elite-mutation-v1",
+  "runtime": "v24.18.1",
+  "seed": 2026,
+  "population": 100,
+  "maxGenerationSteps": 600,
+  "mutationAmount": 0.1,
+  "useSavedNetwork": false,
+  "results": [
+    {
+      "generation": 1,
+      "steps": 600,
+      "distance": 1305.95,
+      "survived": true,
+      "carIndex": 37,
+      "reason": "step limit"
+    },
+    {
+      "generation": 2,
+      "steps": 600,
+      "distance": 1305.95,
+      "survived": true,
+      "carIndex": 1,
+      "reason": "step limit"
+    },
+    {
+      "generation": 3,
+      "steps": 600,
+      "distance": 1305.95,
+      "survived": true,
+      "carIndex": 1,
+      "reason": "step limit"
+    }
+  ],
+  "totalSteps": 1800,
+  "simulatedSeconds": 30,
+  "champion": {
+    "generation": 1,
+    "carIndex": 37,
+    "distance": 1305.95,
+    "survived": true
+  }
+}

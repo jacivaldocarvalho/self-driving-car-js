@@ -10,15 +10,18 @@ Canvas coordinates increase to the right along `x` and downward along `y`. A car
 
 The road looks infinite, but its border segments run from `y = -1000000` to `y = 1000000`. The camera translates the drawing so the leader remains about 70% down the road canvas; this translation does not change vehicle coordinates.
 
-## What happens in one animation frame
+## Updates and rendering
 
-The `animate()` function in [main.js](../assets/js/main.js) performs these steps:
+When running, `animate()` in [main.js](../assets/js/main.js) accumulates elapsed time and calls `updateSimulation()` for each complete fixed step before `renderSimulation()`. An update performs the following steps:
 
 1. Update traffic vehicles first, including their collision polygons.
 2. Update every AI car against the road borders and traffic polygons.
 3. Select the first car whose `y` equals the smallest `y` in the population.
-4. Draw the road, traffic, cars, leader's sensors, and leader's neural network.
-5. Request the next animation frame.
+4. Increment total steps and, when enabled, record evolutionary fitness. A completed generation is replaced at the start of the next update, before traffic and cars move again.
+
+Rendering draws the road, traffic, cars, leader's sensors, and leader's neural network, then refreshes the telemetry panel. `animate()` always requests one next animation callback. While paused, it skips updates and keeps the dash animation frozen, but redraws for layout changes. **Step** performs exactly one update (1/60 s) and redraw while remaining paused. **Restart** recreates the population, applies the seed and optional saved-model loading, and resets the step counter, simulated time, and frame clock without changing the pause mode or creating another callback loop.
+
+The constructor creates each car's initial polygon, so drawing a paused step-zero state does not require movement. At step zero, sensors and inference have not run; telemetry shows `—`, and the network canvas displays a prompt instead of stale saved activity.
 
 Inside `Car.update()`, an undamaged car moves using its existing controls, builds its polygon, and checks damage. Its sensors then read the environment, and its network calculates controls for the next update. The first movement update therefore uses the initially false AI controls. Damaged cars keep updating sensors and inference, but their movement and polygon stop updating.
 
@@ -28,11 +31,17 @@ flowchart LR
     B --> C[Collision check]
     C --> D[Sensor readings]
     D --> E[Network inference]
-    E --> F[Controls for next frame]
+    E --> F[Controls for next update]
     F --> A
 ```
 
-The leader is a position-based selection. There is no safety score or automatic restart, and damaged cars remain eligible. The 100 cars are processed in ordinary JavaScript loops, without worker threads. AI cars do not sense or collide with one another because the `traffic` array contains only the traffic vehicle.
+The leader is a position-based selection. There is no safety score, and damaged cars remain eligible as the position-based leader. Inference mode never automatically restarts a run; Evolution mode separately evaluates peak-distance fitness and replaces the population at generation boundaries. The 100 cars are processed in ordinary JavaScript loops, without worker threads. AI cars do not sense or collide with one another because the `traffic` array contains only the traffic vehicle.
+
+## Repeatable initial conditions
+
+`initializeSimulation()` creates a fresh generator from the applied seed and passes it through `generateCars()` to each car's neural network. A restart with unchanged seed, saved-model input, and code version therefore recreates the same initial parameters and positions. Pending field edits do not affect an active run. Seed validation happens before replacing its population.
+
+The simulation consumes randomness during initial network creation and evolutionary mutation, not inside the movement equations. Compare states after equal update counts, using the same browser engine; discarded wall-clock intervals and cross-engine floating-point equality are separate concerns. See the [reproducibility exercise](experiments.md#7-repeat-a-seeded-experiment).
 
 ## Vehicle movement
 
@@ -57,7 +66,25 @@ y_next = y - cos(angle) * speed
 
 At `angle = 0`, these equations leave `x` unchanged and reduce `y` for a positive speed. Angles are in radians and distances are canvas units, not calibrated physical measurements.
 
-Movement uses fixed increments per animation callback. The timestamp is used for the network's dashed-line animation, not for a physics time step. Consequently, changing callback frequency can change the simulated motion per second. The browser schedules callbacks around repainting and may pause them in background tabs; see [MDN's requestAnimationFrame documentation](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame).
+Movement retains its original fixed increments per update; the scheduler now maps each update to 1/60 s. No variable delta is passed into the vehicle equations. A maximum speed of `3` therefore corresponds to a nominal limit of 180 canvas units per simulated second before the existing per-update friction is applied. These are simulation units, not a calibrated vehicle model.
+
+## Fixed-step clock
+
+`FIXED_STEP_MS = 1000 / 60` defines the simulation interval. Each valid running callback measures time since the previous callback and adds the accepted interval to `accumulatedTime`. For every full interval, it advances the same movement, collision, and inference rules once and subtracts that interval. A small numeric tolerance avoids losing a step at a floating-point boundary. Fractional time remains for the next callback.
+
+At 30 render callbacks per second, a normal callback typically advances two updates. At 120 callbacks per second, some callbacks only render. The simulation still advances 60 steps per simulated second. The first callback only establishes the baseline; it does not invent elapsed time since page load.
+
+This accumulator pattern separates simulation frequency from rendering frequency. Glenn Fiedler discusses the approach and bounded recovery in [Fix Your Timestep!](https://gafferongames.com/post/fix_your_timestep/). The browser schedules callbacks around repainting and may pause them in background tabs; see [MDN's requestAnimationFrame documentation](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame).
+
+### Recovery and transitions
+
+- `MAX_UPDATES_PER_FRAME = 5` bounds work in each callback. Its measured elapsed interval is capped at `5 * FIXED_STEP_MS` (about 83.333 ms); excess elapsed time is discarded, not deferred into a backlog.
+- Accepted fractional time is retained, but Pause, Resume, and a successful Restart reset the timestamp reference and fraction. A failed restart leaves the active clock intact.
+- Pause does not advance updates or simulated time. Step performs one update while remaining paused. The first callback after Resume establishes a new baseline, excluding paused time.
+- Simulated time is calculated from the integer step count: `simulationSteps / 60`. Network dash motion also follows simulated time, so paused rendering does not animate it, and Step advances it consistently.
+- Rendering draws the latest completed state without interpolation. More display callbacks do not create more physics steps; slow frames or long background intervals can make simulated time fall behind wall time.
+
+The [simulation tests](../tests/simulation.test.cjs) compare complete population states after two seconds of scheduled callbacks at 30, 60, 120, and 144 Hz. They also cover irregular intervals, substep accumulation, transitions, single-step behavior, and long stalls.
 
 ## Sensor rays
 

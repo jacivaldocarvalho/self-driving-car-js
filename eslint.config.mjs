@@ -4,6 +4,8 @@ const scriptExports = {
     car: ['Car'],
     controls: ['Controls'],
     network: ['NeuralNetwork'],
+    random: ['createSeededRandom'],
+    evolution: ['Evolution'],
     road: ['Road'],
     sensor: ['Sensor'],
     visualizer: ['Visualizer'],
@@ -42,10 +44,10 @@ export default [
         }
     })),
     {
-        files: ['tests/**/*.cjs'],
+        files: ['tests/**/*.cjs', 'scripts/**/*.cjs'],
         languageOptions: {
             sourceType: 'commonjs',
-            globals: { __dirname: 'readonly' }
+            globals: { __dirname: 'readonly', process: 'readonly', console: 'readonly' }
         }
     }
 ];

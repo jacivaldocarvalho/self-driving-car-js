@@ -5,7 +5,7 @@
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-An educational browser simulation of cars controlled by a small artificial neural network. Built with plain JavaScript, HTML5 Canvas, and CSS, it demonstrates vehicle movement, ray-based sensors, collision detection, and neural network inference without external libraries.
+An educational browser simulation of cars controlled by a small artificial neural network. Built with plain JavaScript, HTML5 Canvas, and CSS, it demonstrates vehicle movement, ray-based sensors, collision detection, neural network inference, and optional evolutionary optimization without external runtime libraries.
 
 [View the simulation](https://jacivaldocarvalho.github.io/self-driving-car-js/)
 
@@ -13,13 +13,13 @@ An educational browser simulation of cars controlled by a small artificial neura
 
 The simulation starts 100 AI-controlled cars in the middle lane of a three-lane road, with one slower traffic vehicle ahead. Each AI car has five sensor rays that detect road borders and traffic. Sensor readings feed a network with five inputs, six hidden neurons, and four binary outputs: forward, left, right, and reverse.
 
-Networks start with random weights and biases. On each animation frame, the application updates vehicle movement, checks collisions, and selects the car with the smallest vertical coordinate as the leading car. The camera follows that car, and a second canvas displays its network. A damaged car stops moving.
+Networks start with pseudo-random weights and biases generated from an explicit seed (default `42`). On each simulation update, the application updates vehicle movement, checks collisions, and selects the car with the smallest vertical coordinate as the leading car. The camera follows that car, and a second canvas displays its network. A damaged car stops moving.
 
-This implementation performs inference and lets the user save a selected network. It does not implement supervised learning, backpropagation, mutation, or an automated training loop. Reloading generates new random networks, except for the first car when a saved network exists.
+By default, controllers perform inference with fixed parameters. Optional **Evolution mode** evaluates generations, preserves an elite, and mutates copies between evaluations. There is no supervised dataset, backpropagation, or gradient-based optimizer. Restarting recreates the seeded population; a compatible saved network replaces the first controller only when its loading option is enabled. Reloading resets experiment controls to their defaults.
 
 ## Educational documentation
 
-Follow the [learning guide](docs/README.md) for code-based explanations of [movement, sensors, and collisions](docs/simulation.md), the [neural network](docs/neural-network.md), and [guided experiments](docs/experiments.md). The guides distinguish implemented behavior from learning algorithms that are not part of this project.
+Start with the [user manual](docs/usage.md), then follow the [learning guide](docs/README.md) for [simulation geometry](docs/simulation.md), [neural networks](docs/neural-network.md), [evolutionary search](docs/evolution.md), and [guided experiments](docs/experiments.md). [Measured examples](docs/results.md) include reproducible results from this application. [Attribution](docs/attribution.md) distinguishes the original course from this repository's additions.
 
 ## Run locally
 
@@ -42,18 +42,56 @@ Then open `http://127.0.0.1:8000`. Browser storage behavior for files opened thr
 
 ## Controls and saved networks
 
-The interface provides two actions:
+The interface provides simulation controls and model persistence:
 
 | Button | Action |
 | --- | --- |
+| **Pause / Resume** | Freeze or continue simulation updates. Rendering continues so the page can resize. |
+| **Step** | While paused, advance exactly one simulation update (1/60 s). |
+| **Restart** | Apply the experiment settings, recreate the seeded population, and optionally load a compatible saved model into the first car, preserving the paused/running mode. |
 | **Save network** | Save the current leading car's network in `localStorage` under `bestBrain`, replacing any previous saved network. |
+| **Save champion** | In Evolution mode, save the best completed-generation controller to `bestBrain`, replacing any previously saved network. |
 | **Remove saved network** | Remove the saved network from `localStorage`. |
 
-Reload the page to start another run. When a saved network exists, it is loaded into the first car only; the other 99 cars keep newly randomized networks. Saving or removing a network does not restart the current run or replace the active cars' networks.
+Click **Restart** or reload the page to start another run. When **Use saved network** is enabled and a compatible saved network exists, it is loaded into the first car only; the other 99 cars keep their seeded networks. Saving or removing a network does not restart the current run or replace the active cars' networks. Saving is available after at least one update, so the stored network contains initialized activity arrays.
+
+The **Leader telemetry** panel identifies the observed car, simulation step, and simulated time, displays five sensor inputs rounded to three decimals, and shows four binary controls for the next update. Before the first update, values are shown as `—`; saved activity is not presented as a fresh observation. The leader can change, and a damaged leader's outputs do not make it move again. Parameters remain fixed while an individual drives; Evolution mode creates new candidate parameters between generations.
 
 Saved networks belong to the browser profile and origin. Changing the host, port, or protocol uses different storage. Nothing is uploaded to a backend.
 
 Keyboard controls are implemented for cars created with the `KEYS` control type, but the default simulation creates only `AI` and `DUMMY` cars. There is no interface switch for manual driving.
+
+## Reproducible experiments
+
+The **Seed** field accepts whole decimal integers from `0` to `4294967295`. The default is `42`; **Use saved network** starts enabled and **Evolution mode** starts disabled. Edit the settings, then click **Restart** to apply it. The interface shows pending changes separately from the active seed and the saved-network status at the last restart. Invalid seeds leave the current run unchanged. Settings are kept in memory; a page reload restores the defaults.
+
+For a comparison that depends only on the seed, pause, disable **Use saved network**, choose a seed, and restart. Advance a known number of steps. Repeating with the same seed, configuration, code version, and browser engine reproduces the population and state at that step. Changing the seed creates a different population. The clock schedules 60 fixed updates per simulated second, independently of rendering frequency. Long stalls discard excess elapsed time, so simulated time may lag behind the wall clock. Cross-engine bit-for-bit equality is not guaranteed.
+
+With saved loading enabled, the saved parameters are another input to the experiment and must also match. Disabling loading does not delete stored data or disable the explicit Save/Remove actions. All 100 seeded networks are generated before optionally replacing the first one, so loading a model does not shift the other cars' random sequence. Invalid or unavailable saved data falls back to the seeded first controller.
+
+See [the reproducibility exercise](docs/experiments.md#7-repeat-a-seeded-experiment) for a step-by-step comparison.
+
+## Optional evolution
+
+Enable **Evolution mode** and click **Restart**. Each generation evaluates 100 controllers for at most 600 fixed steps (10 simulated seconds), or until all cars are damaged. Fitness is peak forward distance, with survival and stable population order resolving ties. The next generation contains one unchanged elite and 99 copies mutated with strength `0.1`.
+
+The panel separates current-generation progress from the best completed result. A completed generation remains visible until the next update starts its successor. Total simulated time continues across generations. **Save champion** is explicit; evolution never automatically overwrites browser storage. Restart clears the in-memory champion and resets the experiment.
+
+For reproducible measured examples without browser rendering or saved data:
+
+```bash
+npm run experiment -- --seed 42 --generations 3
+```
+
+This command requires Node.js but no additional packages. It executes the actual application update logic; it is not a rendering benchmark. See [the manual](docs/usage.md#command-line-experiments), [theory and algorithm](docs/evolution.md), and [recorded results](docs/results.md). Improved distance in one simple scenario does not establish general driving ability, and progress can plateau.
+
+## Simulation clock
+
+Each physics update represents `1/60` second. A rendering callback may perform zero, one, or several updates based on elapsed time, then draw the most recent state. The first callback after startup, resume, or restart establishes a timestamp baseline without advancing the simulation. Pause freezes simulated time, and Step advances it by exactly `1/60` second.
+
+Recovery is limited to five updates per callback: no more than about `83.333 ms` of that callback's elapsed interval is accepted. Extra elapsed time is discarded, while an accepted fractional step is carried forward. Pausing and restarting clear that fractional time. This prevents long catch-up loops after a stall or a background-tab interval. Compare experiments using the displayed simulated time (`steps / 60`), not wall-clock waiting time.
+
+See [the timing guide](docs/simulation.md#fixed-step-clock) for the scheduling details.
 
 ## Project structure
 
@@ -64,26 +102,39 @@ assets/
   js/
     car.js           Vehicle movement, collision checks, and drawing
     controls.js      AI, keyboard, and traffic control state
+    evolution.js     Fitness, champion selection, and reproduction
     main.js          Initialization, animation loop, and persistence
     network.js       Neural network initialization and inference
+    random.js        Seeded SplitMix32 random generator
     road.js          Road geometry, lanes, and drawing
     sensor.js        Sensor rays and obstacle readings
     utils.js         Geometry, interpolation, and color helpers
     visualizer.js    Neural network rendering
 docs/
   README.md          Learning guide and reading order
+  usage.md           Browser and command-line manual
+  evolution.md       Evolution theory and implemented algorithm
+  results.md         Measured examples and reproduction commands
+  attribution.md     Original author and source references
+  examples/          Recorded experiment JSON
   simulation.md      Movement, sensors, and collision geometry
   neural-network.md  Network structure, inference, and learning concepts
   experiments.md     Guided observations and numerical examples
+scripts/
+  run-experiment.cjs  Headless experiments using application scripts
 index.html           Page and script entry point
 tests/
   core.test.cjs       Geometry, sensors, inference, and collision tests
+  evolution.test.cjs  Cloning, mutation, fitness, and elitism tests
+  experiment.test.cjs Command-line experiment tests
+  random.test.cjs     Random generator and dependency injection tests
   simulation.test.cjs Simulation and persistence regression tests
 .github/workflows/
   quality.yml        Automated lint and tests
 eslint.config.mjs    JavaScript error checks
 package.json         Development commands and dependencies
 package-lock.json    Locked development dependencies
+THIRD_PARTY_NOTICES.md Original source notice
 LICENSE              MIT license
 README.md
 ```
@@ -102,37 +153,46 @@ npm test
 
 `npm ci` installs the locked development dependencies for ESLint. Node.js and these dependencies are only needed for development checks; the browser runtime remains dependency-free. ESLint uses its recommended error-detection rules, with the shared globals of the classic browser scripts declared explicitly. It does not enforce formatting.
 
-Tests execute the application scripts using Node's built-in test runner and VM, with browser APIs replaced by test doubles where needed. They cover geometry, sensor readings, neural network inference, collisions, saved network compatibility, invalid data, unavailable storage, save/remove actions, and animation rendering settings. They do not replace visual browser checks.
+Tests execute the application scripts using Node's built-in test runner and VM, with browser APIs replaced by test doubles where needed. They cover geometry, sensor readings, neural network inference, collisions, saved network compatibility, invalid data, unavailable storage, save/remove actions, animation rendering settings, pause/resume, single-step updates, restart, leader telemetry, seeded reproduction, saved-model selection, fixed-step schedules at 30/60/120/144 Hz, bounded recovery after stalls, generation transitions, independent model copies, champion persistence, and command-line reproduction. They do not replace visual browser checks.
 
-`quality.yml` runs lint and tests on Node.js 24 for pushes to `main` and `chore/educational-project-modernization`, and pull requests targeting `main`. It validates changes without deploying the site.
+`quality.yml` runs lint and tests on Node.js 24 for pushes to `main` and `feat/interactive-learning`, and pull requests targeting `main`. It validates changes without deploying the site.
 
 To check changes manually:
 
 1. Open the page and check the browser console for errors.
 2. Confirm that the road, cars, sensor rays, and neural network are rendered and the simulation advances.
-3. Click **Save network** and inspect the `bestBrain` entry in the browser's developer tools under local storage.
-4. Reload and confirm that the first car receives the saved network.
-5. Click **Remove saved network**, confirm that the storage entry disappears, and reload to start with newly randomized networks.
+3. Pause, note the step counter, simulated time, and car positions, and confirm that they remain fixed. Use **Step** to advance once; resume to continue.
+4. Restart while paused and confirm step `0`, initial positions, and `—` telemetry; advance once to populate the panel.
+5. Click **Save network** and inspect the `bestBrain` entry in the browser's developer tools under local storage.
+6. Restart and confirm that the first car receives the saved network.
+7. Click **Remove saved network**, confirm that the storage entry disappears, and restart to recreate only the seeded networks.
 
-Random networks can produce cars that remain still, reverse, or collide. Successful obstacle avoidance is not guaranteed.
+Pseudo-random networks can produce cars that remain still, reverse, or collide. Successful obstacle avoidance is not guaranteed.
 
 ## Known limitations
 
-- Saving and loading require browser storage access. If loading fails or a saved network is incompatible, the simulation continues with a new network and displays a status message. Existing stored data is retained until you explicitly save or remove it.
+- Saving and enabled model loading require browser storage access. If loading fails or a saved network is incompatible, the simulation continues with a new network and displays a status message. Existing stored data is retained until you explicitly save or remove it.
 - Network validation checks dimensions and finite numeric values, not driving quality.
-- On narrow screens, the network visualization appears below the road; scroll to view it.
-- The simulation uses a single traffic vehicle and simplified, frame-based physics. It is an educational model, unsuitable for real vehicle control.
+- On narrow screens, the telemetry panel and network visualization appear below the road; scroll to view them.
+- The clock discards elapsed time beyond its catch-up limit; simulated time may diverge from wall-clock time during slow frames or background-tab intervals. Rendering uses the latest state without interpolation.
+- The simulation uses a single traffic vehicle and simplified physics with fixed updates. It is an educational model, unsuitable for real vehicle control.
 
 ## Contributing
 
 Open an issue to discuss a bug or a focused improvement. For pull requests, describe the behavior changed and the validation performed. Keep changes consistent with the project's educational scope and dependency-free browser runtime.
 
-## References and author
+## Original author and learning reference
 
-The main learning reference is [Radu Mariescu-Istodor's educational material](https://radufromfinland.com/).
+This educational adaptation is based on **Radu Mariescu-Istodor**'s [Self-driving Car (no libraries) course and source code](https://github.com/gniziemazity/self-driving-car) and [teaching material](https://radufromfinland.com/). The course explains the underlying simulation and neural controller; this repository adds its own interactive controls, seeded experiments, fixed-step clock, automated evolution, tests, and documentation. See [attribution](docs/attribution.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
-Author profiles: [GitHub](https://github.com/jacivaldocarvalho), [LinkedIn](https://www.linkedin.com/in/jacivaldocarvalho/), and [Medium](https://medium.com/@jacivaldocarvalho). Contact: [email](mailto:jacivaldocarvalho@gmail.com).
+## Author
+
+**Jacivaldo Carvalho**
+
+Telecommunications Engineer | DevOps Engineer | SRE | Networking
+
+[GitHub](https://github.com/jacivaldocarvalho) | [LinkedIn](https://www.linkedin.com/in/jacivaldocarvalho) | [Website](https://www.jacivaldocarvalho.com/)
 
 ## License
 
-Licensed under the [MIT License](LICENSE). See the license file for the copyright notice and terms.
+Licensed under the [MIT License](LICENSE). See the license file and [third-party notices](THIRD_PARTY_NOTICES.md) for copyright notices and terms.

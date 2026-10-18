@@ -1,5 +1,5 @@
 class Car{
-    constructor (x, y, width, height, controlType, maxSpeed = 3){
+    constructor (x, y, width, height, controlType, maxSpeed = 3, random = Math.random){
         this.x=x;
         this.y=y;
         this.width=width;
@@ -20,11 +20,12 @@ class Car{
 
             // Insere a Rede neural
             this.brain = new NeuralNetwork(
-                [this.sensor.rayCount, 6, 4]
+                [this.sensor.rayCount, 6, 4], random
             );
         }
 
         this.controls = new Controls(controlType);
+        this.polygon = this.#createPolygon();
     }
 
     update(roadBorders, traffic){

@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - chore/educational-project-modernization
+      - feat/interactive-learning
   pull_request:
     branches:
       - main

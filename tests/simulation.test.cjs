@@ -5,7 +5,7 @@ const { resolve } = require('node:path');
 const vm = require('node:vm');
 
 const root = resolve(__dirname, '..');
-const scripts = ['visualizer', 'network', 'sensor', 'utils', 'road', 'controls', 'car', 'main']
+const scripts = ['random', 'visualizer', 'network', 'sensor', 'utils', 'road', 'controls', 'car', 'evolution', 'main']
     .map(name => readFileSync(resolve(root, 'assets/js', `${name}.js`), 'utf8'));
 
 function start({ saved = null, fail = null } = {}) {
@@ -26,7 +26,11 @@ function start({ saved = null, fail = null } = {}) {
         element.getContext = () => context;
         return element;
     }
-    const elements = { carContainer: canvas(), networkContainer: canvas(), storageStatus: status };
+    const elements = Object.fromEntries(
+        [...readFileSync(resolve(root, 'index.html'), 'utf8').matchAll(/id="([^"]+)"/g)]
+            .map(([, id]) => [id, { textContent: '', disabled: false }])
+    );
+    Object.assign(elements, { carContainer: canvas(), networkContainer: canvas(), storageStatus: status });
     const storage = Object.fromEntries(['getItem', 'setItem', 'removeItem'].map(method => [method, (key, value) => {
         if (fail === method) throw new Error('Storage unavailable');
         if (method === 'getItem') return data.get(key) ?? null;
@@ -43,13 +47,18 @@ function start({ saved = null, fail = null } = {}) {
         Object.defineProperty(context, 'localStorage', { get() { throw new Error('Storage denied'); } });
     }
     scripts.forEach(source => vm.runInContext(source, context));
-    return { context, data, status, assignments, frames };
+    return { context, data, status, assignments, frames, elements };
+}
+
+function advanceOneUpdate(app, time = 0) {
+    app.frames.shift()(time);
+    app.frames.shift()(time + 1000 / 60);
 }
 
 function savedNetwork() {
     const app = start();
     // Runtime inputs and outputs are populated before a user can save a network.
-    app.frames.shift()(0);
+    advanceOneUpdate(app);
     return vm.runInContext('JSON.stringify(cars[0].brain)', app.context);
 }
 
@@ -77,7 +86,7 @@ for (const [name, saved] of [
         const app = start({ saved });
         assert.match(app.status.textContent, /Could not load/);
         assert.equal(app.data.get('bestBrain'), saved);
-        assert.doesNotThrow(() => app.frames.shift()(0));
+        assert.doesNotThrow(() => advanceOneUpdate(app));
     });
 }
 
@@ -85,13 +94,13 @@ for (const fail of ['getItem', 'access']) {
     test(`starts and animates when storage fails at ${fail}`, () => {
         const app = start({ fail });
         assert.match(app.status.textContent, /Could not load/);
-        assert.doesNotThrow(() => app.frames.shift()(0));
+        assert.doesNotThrow(() => advanceOneUpdate(app));
     });
 }
 
 test('saving and removing change storage without replacing the active network', () => {
     const app = start();
-    app.frames.shift()(0);
+    advanceOneUpdate(app);
     const active = vm.runInContext('bestCar.brain', app.context);
     vm.runInContext('save()', app.context);
     assert.deepEqual(JSON.parse(app.data.get('bestBrain')), JSON.parse(JSON.stringify(active)));
@@ -108,20 +117,561 @@ for (const [fail, action, message] of [
 ]) {
     test(`reports ${fail} failure and preserves existing data`, () => {
         const app = start({ saved: valid, fail });
+        advanceOneUpdate(app);
         assert.doesNotThrow(() => vm.runInContext(action, app.context));
         assert.match(app.status.textContent, message);
         assert.equal(app.data.get('bestBrain'), valid);
     });
 }
 
-test('uses the frame timestamp and restores opacity for the leading car', () => {
+test('uses simulated time for network animation and restores leader opacity', () => {
     const app = start();
     assert.equal(app.assignments.length, 0);
     assert.equal(app.frames.length, 1);
-    app.frames.shift()(100);
-    assert.deepEqual(app.assignments.filter(([key]) => key === 'globalAlpha'), [
+    advanceOneUpdate(app, 100);
+    assert.deepEqual(app.assignments.filter(([key]) => key === 'globalAlpha').slice(-2), [
         ['globalAlpha', 0.2], ['globalAlpha', 1]
     ]);
-    assert.deepEqual(app.assignments.filter(([key]) => key === 'lineDashOffset'), [['lineDashOffset', -2]]);
+    assert.deepEqual(app.assignments.filter(([key]) => key === 'lineDashOffset').slice(-1), [['lineDashOffset', -(1000 / 60) / 50]]);
     assert.equal(app.frames.length, 1);
+});
+
+
+function snapshot(app) {
+    return vm.runInContext(`JSON.stringify({
+        cars: cars.map(car => [car.x, car.y, car.speed, car.angle, car.damaged,
+            car.controls, car.brain, car.sensor.readings, car.polygon]),
+        traffic: traffic.map(car => [car.x, car.y, car.speed, car.polygon]),
+        simulationSteps
+    })`, app.context);
+}
+
+test('pause before the first frame renders valid initial geometry without moving', () => {
+    const app = start({ saved: valid });
+    const initial = snapshot(app);
+    assert.doesNotThrow(() => vm.runInContext('togglePause()', app.context));
+    advanceOneUpdate(app, 100);
+    assert.equal(snapshot(app), initial);
+    assert.equal(app.elements.pauseButton.textContent, 'Resume');
+    assert.equal(app.elements.stepButton.disabled, false);
+    assert.equal(app.elements.sensorInput0.textContent, '—');
+    assert.equal(app.elements.controlOutput0.textContent, '—');
+    assert.equal(app.elements.simulationState.textContent, 'Paused · Step 0');
+});
+
+test('paused callbacks freeze vehicles, sensors, network activity, and dash animation', () => {
+    const app = start();
+    advanceOneUpdate(app, 100);
+    vm.runInContext('togglePause()', app.context);
+    const before = snapshot(app);
+    const offset = vm.runInContext('networkCtx.lineDashOffset', app.context);
+    for (let i = 0; i < 5; i++) app.frames.shift()(200 + i * 100);
+    assert.equal(snapshot(app), before);
+    assert.equal(vm.runInContext('networkCtx.lineDashOffset', app.context), offset);
+    assert.equal(app.frames.length, 1);
+});
+
+test('Step advances exactly one update only while paused', () => {
+    const app = start();
+    const initial = snapshot(app);
+    vm.runInContext('stepSimulation()', app.context);
+    assert.equal(snapshot(app), initial);
+    advanceOneUpdate(app, 100);
+    vm.runInContext('togglePause()', app.context);
+    const beforeY = vm.runInContext('traffic[0].y', app.context);
+    vm.runInContext('stepSimulation()', app.context);
+    const afterY = vm.runInContext('traffic[0].y', app.context);
+    assert.ok(Math.abs((beforeY - afterY) - 0.3) < 1e-10);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 2);
+    assert.equal(vm.runInContext('paused', app.context), true);
+    const stepped = snapshot(app);
+    advanceOneUpdate(app, 200);
+    assert.equal(snapshot(app), stepped);
+    assert.equal(app.frames.length, 1);
+});
+
+test('resume starts a fresh clock without adding an animation loop', () => {
+    const app = start();
+    vm.runInContext('togglePause()', app.context);
+    advanceOneUpdate(app, 100);
+    vm.runInContext('togglePause()', app.context);
+    advanceOneUpdate(app, 200);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+    assert.equal(app.frames.length, 1);
+    assert.equal(app.elements.pauseButton.textContent, 'Pause');
+    assert.equal(app.elements.stepButton.disabled, true);
+});
+
+test('restart while paused resets positions and reloads the saved model without moving', () => {
+    const app = start({ saved: valid });
+    advanceOneUpdate(app, 100);
+    vm.runInContext('togglePause()', app.context);
+    const oldCars = vm.runInContext('cars', app.context);
+    const stored = app.data.get('bestBrain');
+    for (let i = 0; i < 3; i++) vm.runInContext('restartSimulation()', app.context);
+    assert.notEqual(vm.runInContext('cars', app.context), oldCars);
+    assert.equal(vm.runInContext('JSON.stringify(cars[0].brain)', app.context), valid);
+    assert.equal(vm.runInContext('cars.every(car => car.y === 100 && car.speed === 0 && !car.damaged)', app.context), true);
+    assert.equal(vm.runInContext('traffic[0].y', app.context), -100);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 0);
+    assert.equal(vm.runInContext('paused', app.context), true);
+    assert.equal(app.data.get('bestBrain'), stored);
+    assert.equal(app.frames.length, 1);
+    assert.equal(app.elements.sensorInput0.textContent, '—');
+});
+
+test('restart while running preserves running mode and resumes after a new clock baseline', () => {
+    const app = start();
+    advanceOneUpdate(app, 100);
+    vm.runInContext('restartSimulation()', app.context);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 0);
+    assert.equal(vm.runInContext('paused', app.context), false);
+    assert.equal(app.frames.length, 1);
+    advanceOneUpdate(app, 200);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+});
+
+test('telemetry follows the observed leader and displays its inputs and next controls', () => {
+    const app = start();
+    vm.runInContext('cars[1].y = -500;', app.context);
+    advanceOneUpdate(app, 100);
+    assert.match(app.elements.observedCar.textContent, /^Car 2 · Active/);
+    assert.equal(app.elements.simulationState.textContent, 'Running · Step 1');
+    const brain = vm.runInContext('bestCar.brain', app.context);
+    brain.levels[0].inputs.forEach((value, index) => {
+        assert.equal(app.elements[`sensorInput${index}`].textContent, value.toFixed(3));
+    });
+    brain.levels[brain.levels.length - 1].outputs.forEach((value, index) => {
+        assert.equal(app.elements[`controlOutput${index}`].textContent, value ? 'On (1)' : 'Off (0)');
+    });
+    vm.runInContext('bestCar.damaged = true; togglePause();', app.context);
+    assert.match(app.elements.observedCar.textContent, /^Car 2 · Damaged/);
+});
+
+test('saving before any update preserves the existing model', () => {
+    const app = start({ saved: valid });
+    vm.runInContext('togglePause(); save();', app.context);
+    assert.equal(app.data.get('bestBrain'), valid);
+    assert.match(app.status.textContent, /Advance at least one step/);
+});
+
+test('restart handles invalid or unavailable saved data without overwriting it', () => {
+    for (const options of [{ saved: '{invalid' }, { saved: valid, fail: 'getItem' }]) {
+        const app = start(options);
+        vm.runInContext('togglePause(); restartSimulation(); stepSimulation();', app.context);
+        assert.equal(app.data.get('bestBrain'), options.saved);
+        assert.match(app.status.textContent, /Could not load/);
+        assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+        assert.equal(app.frames.length, 1);
+    }
+});
+
+
+function configureExperiment(app, seed, useSavedNetwork) {
+    app.elements.seedInput.value = String(seed);
+    app.elements.useSavedNetwork.checked = useSavedNetwork;
+    vm.runInContext('restartSimulation()', app.context);
+}
+
+test('the default seed is explicit and does not replace Math.random', () => {
+    const app = start();
+    assert.equal(app.elements.seedInput.value, '42');
+    assert.equal(app.elements.useSavedNetwork.checked, true);
+    assert.match(app.elements.activeExperiment.textContent, /Active seed: 42/);
+    assert.match(app.elements.activeExperiment.textContent, /none available/);
+    assert.equal(vm.runInContext('Math.random.toString().includes("[native code]")', app.context), true);
+});
+
+test('the same seed recreates the complete population and its state after 120 updates', () => {
+    const app = start();
+    vm.runInContext('togglePause()', app.context);
+    configureExperiment(app, 2026, false);
+    const initial = snapshot(app);
+    vm.runInContext('for (let i=0;i<120;i++) updateSimulation();', app.context);
+    const firstRun = snapshot(app);
+    configureExperiment(app, 2026, false);
+    assert.equal(snapshot(app), initial);
+    vm.runInContext('for (let i=0;i<120;i++) updateSimulation();', app.context);
+    assert.equal(snapshot(app), firstRun);
+    assert.equal(vm.runInContext('paused', app.context), true);
+    assert.equal(app.frames.length, 1);
+});
+
+test('different seeds change initialized network parameters', () => {
+    const app = start();
+    configureExperiment(app, 1, false);
+    const first = vm.runInContext('JSON.stringify(cars.map(car=>car.brain.levels.map(l=>l.weights)))', app.context);
+    configureExperiment(app, 2, false);
+    const second = vm.runInContext('JSON.stringify(cars.map(car=>car.brain.levels.map(l=>l.weights)))', app.context);
+    assert.notEqual(first, second);
+});
+
+test('editing settings leaves the active run untouched until Restart', () => {
+    const app = start();
+    vm.runInContext('togglePause()', app.context);
+    const initial = snapshot(app);
+    app.elements.seedInput.value = '123';
+    app.elements.useSavedNetwork.checked = false;
+    vm.runInContext('updateExperimentSettings()', app.context);
+    assert.match(app.elements.experimentStatus.textContent, /Pending changes/);
+    assert.match(app.elements.activeExperiment.textContent, /Active seed: 42/);
+    assert.equal(snapshot(app), initial);
+    vm.runInContext('restartSimulation()', app.context);
+    assert.match(app.elements.activeExperiment.textContent, /Active seed: 123/);
+    assert.match(app.elements.activeExperiment.textContent, /disabled/);
+    assert.match(app.elements.experimentStatus.textContent, /Settings applied/);
+    assert.equal(vm.runInContext('paused', app.context), true);
+});
+
+test('the saved-model option replaces only the first seeded network', () => {
+    const app = start({ saved: valid });
+    configureExperiment(app, 101, false);
+    const randomFirst = vm.runInContext('JSON.stringify(cars[0].brain)', app.context);
+    const others = vm.runInContext('JSON.stringify(cars.slice(1).map(car=>car.brain))', app.context);
+    assert.notEqual(randomFirst, valid);
+    assert.equal(app.data.get('bestBrain'), valid);
+    configureExperiment(app, 101, true);
+    assert.equal(vm.runInContext('JSON.stringify(cars[0].brain)', app.context), valid);
+    assert.equal(vm.runInContext('JSON.stringify(cars.slice(1).map(car=>car.brain))', app.context), others);
+    assert.match(app.elements.activeExperiment.textContent, /loaded/);
+});
+
+test('the same seed and saved model reproduce the state after 120 updates', () => {
+    const first = start({ saved: valid });
+    const second = start({ saved: valid });
+    for (const app of [first, second]) {
+        configureExperiment(app, 789, true);
+        vm.runInContext('for (let i=0;i<120;i++) updateSimulation();', app.context);
+    }
+    assert.equal(snapshot(first), snapshot(second));
+});
+
+test('disabled saved-model loading skips unavailable storage and preserves data', () => {
+    for (const fail of ['getItem', 'access']) {
+        const app = start({ saved: valid, fail });
+        configureExperiment(app, 0, false);
+        assert.equal(app.status.textContent, '');
+        assert.match(app.elements.activeExperiment.textContent, /disabled/);
+        assert.equal(app.data.get('bestBrain'), valid);
+        assert.doesNotThrow(() => advanceOneUpdate(app));
+    }
+});
+
+test('invalid saved data falls back to the same seeded population as disabled loading', () => {
+    const app = start({ saved: '{invalid' });
+    configureExperiment(app, 456, true);
+    const recovered = snapshot(app);
+    assert.match(app.elements.activeExperiment.textContent, /invalid or unavailable/);
+    configureExperiment(app, 456, false);
+    assert.equal(snapshot(app), recovered);
+    assert.equal(app.data.get('bestBrain'), '{invalid');
+});
+
+for (const seed of ['', '-1', '1.5', '4294967296', 'NaN', 'Infinity', '1e3', '0x10']) {
+    test(`invalid seed "${seed}" cannot restart or alter the active population`, () => {
+        const app = start();
+        vm.runInContext('togglePause()', app.context);
+        const before = snapshot(app);
+        app.elements.seedInput.value = seed;
+        vm.runInContext('restartSimulation()', app.context);
+        assert.equal(snapshot(app), before);
+        assert.match(app.status.textContent, /Could not restart/);
+        assert.match(app.elements.activeExperiment.textContent, /Active seed: 42/);
+        assert.equal(app.frames.length, 1);
+    });
+}
+
+test('both unsigned seed boundaries are accepted and normalized', () => {
+    const app = start();
+    for (const seed of ['0000', '4294967295']) {
+        configureExperiment(app, seed, false);
+        assert.equal(app.elements.seedInput.value, String(Number(seed)));
+        assert.match(app.elements.experimentStatus.textContent, /Settings applied/);
+        assert.equal(app.status.textContent, '');
+    }
+});
+
+
+for (const frequency of [30, 60, 120, 144]) {
+    test(`two seconds at ${frequency} Hz produce the same 120-step population`, () => {
+        const reference = start();
+        vm.runInContext('for(let i=0;i<120;i++) updateSimulation();', reference.context);
+        const app = start();
+        app.frames.shift()(0);
+        for (let i=1;i<=frequency*2;i++) app.frames.shift()(i * 1000 / frequency);
+        assert.equal(vm.runInContext('simulationSteps', app.context), 120);
+        assert.equal(snapshot(app), snapshot(reference));
+        assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 2.000 s');
+        assert.equal(app.frames.length, 1);
+    });
+}
+
+test('the first callback establishes time without advancing physics or inference', () => {
+    const app = start();
+    const initial = snapshot(app);
+    app.frames.shift()(10000);
+    assert.equal(snapshot(app), initial);
+    assert.equal(app.elements.sensorInput0.textContent, '—');
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.000 s');
+    app.frames.shift()(10000 + 1000/60);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+});
+
+test('substep callbacks accumulate without advancing before a complete step', () => {
+    const app = start();
+    app.frames.shift()(0);
+    app.frames.shift()(4);
+    app.frames.shift()(8);
+    app.frames.shift()(12);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 0);
+    app.frames.shift()(1000/60);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.017 s');
+});
+
+test('irregular callback intervals preserve a fixed one-second trajectory', () => {
+    const reference = start();
+    vm.runInContext('for(let i=0;i<60;i++) updateSimulation();', reference.context);
+    const app = start();
+    const intervals = [5,25,7,30,12,21];
+    let time = 0;
+    let index = 0;
+    app.frames.shift()(0);
+    while (time < 1000) {
+        time = Math.min(1000, time + intervals[index++ % intervals.length]);
+        app.frames.shift()(time);
+    }
+    assert.equal(snapshot(app), snapshot(reference));
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 1.000 s');
+});
+
+test('long stalls recover at most five steps and discard excess elapsed time', () => {
+    const app = start();
+    app.frames.shift()(0);
+    app.frames.shift()(10);
+    app.frames.shift()(10000);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 5);
+    const before = snapshot(app);
+    app.frames.shift()(10000);
+    assert.equal(snapshot(app), before);
+    app.frames.shift()(10000 + 1000/60);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 6);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.100 s');
+});
+
+test('pause and resume discard old fractional time and elapsed pause duration', () => {
+    const app = start();
+    app.frames.shift()(0);
+    app.frames.shift()(10);
+    vm.runInContext('togglePause()', app.context);
+    app.frames.shift()(100000);
+    vm.runInContext('togglePause()', app.context);
+    app.frames.shift()(200000);
+    app.frames.shift()(200010);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 0);
+    app.frames.shift()(200017);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+    assert.equal(app.frames.length, 1);
+});
+
+test('restart discards the previous frame baseline and fractional time', () => {
+    const app = start();
+    app.frames.shift()(0);
+    app.frames.shift()(10);
+    vm.runInContext('restartSimulation()', app.context);
+    app.frames.shift()(100000);
+    app.frames.shift()(100010);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 0);
+    app.frames.shift()(100017);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+});
+
+test('manual Step advances simulated time once and stays frozen across paused callbacks', () => {
+    const app = start();
+    vm.runInContext('togglePause(); stepSimulation();', app.context);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.017 s');
+    const before = snapshot(app);
+    app.frames.shift()(1000000);
+    app.frames.shift()(2000000);
+    assert.equal(snapshot(app), before);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.017 s');
+    vm.runInContext('stepSimulation()', app.context);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 2);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.033 s');
+});
+
+
+function enableEvolution(app, seed = 42) {
+    app.elements.evolutionMode.checked = true;
+    configureExperiment(app, seed, false);
+}
+
+function parameters(brain) {
+    return JSON.stringify(brain.levels.map(level => ({ weights: level.weights, biases: level.biases })));
+}
+
+function runGenerations(app, count) {
+    return vm.runInContext(`(() => {
+        const trace = [];
+        for(let i=0;i<${count}*600 && trace.length<${count};i++) {
+            updateSimulation();
+            if(evolution.completed) trace.push({...evolution.lastResult});
+        }
+        return JSON.stringify({trace,champion:evolution.champion});
+    })()`, app.context);
+}
+
+test('evolution is off by default and inference mode never replaces the population', () => {
+    const app = start();
+    const initialCars = vm.runInContext('cars', app.context);
+    vm.runInContext('for(let i=0;i<1200;i++) updateSimulation();', app.context);
+    assert.equal(vm.runInContext('evolution', app.context), null);
+    assert.equal(vm.runInContext('cars', app.context), initialCars);
+    assert.equal(app.elements.evolutionMode.checked, false);
+    vm.runInContext('renderSimulation()', app.context);
+    assert.equal(app.elements.evolutionPanel.hidden, true);
+    assert.equal(app.elements.saveChampionButton.disabled, true);
+    assert.match(app.elements.learningMode.textContent, /Inference only/);
+});
+
+test('evolution settings remain pending until a successful restart', () => {
+    const app = start();
+    app.elements.evolutionMode.checked = true;
+    vm.runInContext('updateExperimentSettings()', app.context);
+    assert.match(app.elements.experimentStatus.textContent, /Pending changes/);
+    assert.equal(vm.runInContext('evolution', app.context), null);
+    vm.runInContext('togglePause(); restartSimulation();', app.context);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 1);
+    assert.equal(vm.runInContext('evolution.steps', app.context), 0);
+    assert.equal(vm.runInContext('paused', app.context), true);
+    assert.equal(app.elements.evolutionPanel.hidden, false);
+    assert.match(app.elements.learningMode.textContent, /Evolution enabled/);
+});
+
+test('600 updates complete a generation without automatically saving or hiding the result', () => {
+    const app = start({ saved: valid });
+    enableEvolution(app);
+    vm.runInContext('togglePause(); for(let i=0;i<599;i++) updateSimulation();', app.context);
+    const evolution = vm.runInContext('evolution', app.context);
+    assert.equal(evolution.completed, false);
+    assert.equal(evolution.champion, null);
+    vm.runInContext('stepSimulation()', app.context);
+    assert.equal(evolution.completed, true);
+    assert.equal(evolution.generation, 1);
+    assert.equal(evolution.steps, 600);
+    assert.equal(evolution.lastResult.reason, 'step limit');
+    assert.equal(vm.runInContext('simulationSteps', app.context), 600);
+    assert.equal(app.data.get('bestBrain'), valid);
+    assert.match(app.elements.generationState.textContent, /Generation 1 · Step 600\/600 · Complete/);
+    assert.equal(app.elements.saveChampionButton.disabled, false);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 10.000 s');
+});
+
+test('the next Step starts the next generation with an intact elite and reset traffic', () => {
+    const app = start();
+    enableEvolution(app);
+    vm.runInContext('togglePause(); for(let i=0;i<600;i++) updateSimulation();', app.context);
+    const champion = vm.runInContext('evolution.champion.brain', app.context);
+    const expected = parameters(champion);
+    vm.runInContext('stepSimulation()', app.context);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 2);
+    assert.equal(vm.runInContext('evolution.steps', app.context), 1);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 601);
+    assert.equal(vm.runInContext('paused', app.context), true);
+    assert.equal(parameters(vm.runInContext('cars[0].brain', app.context)), expected);
+    assert.notEqual(vm.runInContext('cars[0].brain', app.context), champion);
+    assert.equal(vm.runInContext('cars.every(car=>car.y===100 && car.speed===0 && !car.damaged)', app.context), true);
+    assert.ok(Math.abs(vm.runInContext('traffic[0].y', app.context) - (-100.15)) < 1e-10);
+    assert.equal(app.frames.length, 1);
+});
+
+test('all damaged cars end a generation early and a paused callback cannot reproduce', () => {
+    const app = start();
+    enableEvolution(app);
+    vm.runInContext('togglePause(); cars.forEach(car=>car.damaged=true); stepSimulation();', app.context);
+    assert.equal(vm.runInContext('evolution.completed', app.context), true);
+    assert.equal(vm.runInContext('evolution.lastResult.reason', app.context), 'all cars damaged');
+    app.frames.shift()(1000000);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 1);
+    vm.runInContext('stepSimulation()', app.context);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 2);
+    assert.equal(vm.runInContext('evolution.steps', app.context), 1);
+});
+
+test('the same seed reproduces three generations, mutations and champion parameters', () => {
+    const app = start();
+    enableEvolution(app, 2026);
+    const first = runGenerations(app, 3);
+    enableEvolution(app, 2026);
+    assert.equal(runGenerations(app, 3), first);
+    const recorded = JSON.parse(first);
+    assert.equal(recorded.trace.length, 3);
+    assert.ok(recorded.trace.every(result=>result.steps<=600));
+});
+
+test('saving a champion uses compatible JSON and retains its completed-generation snapshot', () => {
+    const app = start();
+    enableEvolution(app);
+    runGenerations(app, 1);
+    const expected = parameters(vm.runInContext('evolution.champion.brain', app.context));
+    vm.runInContext('saveChampion()', app.context);
+    const saved = app.data.get('bestBrain');
+    assert.equal(parameters(JSON.parse(saved)), expected);
+    assert.match(app.status.textContent, /Champion from generation 1 saved/);
+    app.elements.evolutionMode.checked = false;
+    app.elements.useSavedNetwork.checked = true;
+    vm.runInContext('restartSimulation()', app.context);
+    assert.equal(vm.runInContext('evolution', app.context), null);
+    assert.equal(parameters(vm.runInContext('cars[0].brain', app.context)), expected);
+    assert.equal(app.elements.evolutionPanel.hidden, true);
+    assert.equal(app.elements.saveChampionButton.disabled, true);
+});
+
+test('saving a champion before evaluation cannot overwrite a stored network', () => {
+    const app = start({ saved: valid });
+    vm.runInContext('saveChampion()', app.context);
+    assert.equal(app.data.get('bestBrain'), valid);
+    enableEvolution(app);
+    vm.runInContext('saveChampion()', app.context);
+    assert.equal(app.data.get('bestBrain'), valid);
+    assert.match(app.status.textContent, /Complete an evolution generation/);
+});
+
+test('champion storage failures are reported without stopping evolution', () => {
+    const app = start({ saved: valid, fail: 'setItem' });
+    enableEvolution(app);
+    runGenerations(app, 1);
+    assert.doesNotThrow(()=>vm.runInContext('saveChampion(); updateSimulation();', app.context));
+    assert.match(app.status.textContent, /Could not save the champion/);
+    assert.equal(app.data.get('bestBrain'), valid);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 2);
+});
+
+test('Restart resets evolution statistics, the RNG stream and total simulated time', () => {
+    const app = start();
+    enableEvolution(app, 42);
+    const initial = snapshot(app);
+    runGenerations(app, 2);
+    vm.runInContext('togglePause(); restartSimulation();', app.context);
+    assert.equal(snapshot(app), initial);
+    assert.equal(vm.runInContext('evolution.generation', app.context), 1);
+    assert.equal(vm.runInContext('evolution.champion', app.context), null);
+    assert.equal(vm.runInContext('evolution.lastResult', app.context), null);
+    assert.equal(vm.runInContext('paused', app.context), true);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.000 s');
+});
+
+test('generation transitions retain fixed-step timing across 30 and 144 Hz schedules', () => {
+    const states = [];
+    for (const frequency of [30,144]) {
+        const app = start();
+        enableEvolution(app, 42);
+        app.frames.shift()(0);
+        for(let i=1;i<=frequency*11;i++) app.frames.shift()(i*1000/frequency);
+        states.push(snapshot(app));
+        assert.equal(vm.runInContext('simulationSteps', app.context), 660);
+        assert.ok(vm.runInContext('evolution.generation', app.context)>=2);
+        assert.equal(app.frames.length, 1);
+    }
+    assert.equal(states[0],states[1]);
 });
