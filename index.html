@@ -36,6 +36,7 @@
         <section id="networkTelemetry" aria-labelledby="telemetryTitle">
             <h1 id="telemetryTitle">Leader telemetry</h1>
             <p id="simulationState"></p>
+            <p id="simulationTime"></p>
             <p id="observedCar"></p>
             <p>Inference only — parameters are not being trained.</p>
             <table>
@@ -59,7 +60,7 @@
                     <tr><th scope="row">Reverse</th><td id="controlOutput3">—</td></tr>
                 </tbody>
             </table>
-            <p class="hint">Pause, then use Step to inspect one update. The observed leader may change.</p>
+            <p class="hint">Pause, then use Step to inspect one update. The observed leader may change. Each step represents 1/60 s; long delays may discard elapsed time.</p>
         </section>
         <canvas id="networkContainer" aria-label="Leading car neural network"></canvas>
     </main>

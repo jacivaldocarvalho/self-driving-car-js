@@ -21,6 +21,7 @@ Basic familiarity with JavaScript arrays, classes, functions, and browser develo
 - A view of the leading car's sensor readings and network activity.
 - Pause/resume, single-step updates, restart, and a panel of network inputs and control outputs.
 - Explicit seeds and optional loading of saved networks for reproducible comparisons.
+- Fixed 60 Hz simulation updates, simulated-time telemetry, and bounded recovery after delays.
 
 The application does not adjust weights from experience. A population and a selected leader are present, but there is no reproduction, mutation, labeled dataset, loss function, or reward-based update. Saving a network keeps an existing controller for another run.
 

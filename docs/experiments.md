@@ -88,7 +88,7 @@ Explain why watching the leading network's changing colors is insufficient evide
 4. Inspect `cars[0].brain.levels` and compare its weights and biases with the saved data. Activity arrays can differ after inference.
 5. Compare `bestCar === cars[0]` in the console.
 
-Expected: the saved parameters are loaded into the first car, but another seeded car may become the leader. Saving does not mutate the remaining 99 networks or start another generation. Identical parameters also do not guarantee identical wall-clock behavior on different displays because physics advances per callback.
+Expected: the saved parameters are loaded into the first car, but another seeded car may become the leader. Saving does not mutate the remaining 99 networks or start another generation. With the same parameters and configuration, fixed steps reproduce the same simulated-time trajectory in the same browser engine. Long stalls may discard elapsed wall-clock time.
 
 **Remove saved network** removes the stored controller for the next reload; it does not reset the active cars until you restart. See the persistence cases in [simulation tests](../tests/simulation.test.cjs).
 
@@ -110,7 +110,7 @@ Read the `getItem`, storage-access, `setItem`, and `removeItem` failure cases in
 
 1. Click **Pause** and note the **Step** counter and observed car ID.
 2. Wait and confirm that the counter, positions, inputs, and outputs stay fixed.
-3. Click **Step** once. The counter increases by one, and telemetry reflects the resulting observation and inference. A car may remain still depending on its controls or damage state.
+3. Click **Step** once. The counter increases by one and simulated time increases by 1/60 s, and telemetry reflects the resulting observation and inference. A car may remain still depending on its controls or damage state.
 4. Read the **Controls for the next update** table, then step again. Movement uses those previous controls before new inference replaces them.
 5. Check the observed car ID after each step: the position-based leader may change.
 6. Click **Restart** while paused. Expect step `0`, initial positions, and `—` values until the first new update. Resume to continue.
@@ -148,8 +148,23 @@ Expected: `Same state: true` in the same code version and browser engine. The co
 
 With **Use saved network** enabled, repeatability also requires unchanged saved parameters. This exercise disables loading without removing your saved controller. Population size, road, traffic, and update rules must match as well. The [simulation tests](../tests/simulation.test.cjs) compare the full population after 120 updates, with and without a saved model.
 
+## 8. Compare simulated time with rendering time
+
+1. Pause and restart a seeded experiment. The panel starts at step `0` and simulated time `0.000 s`.
+2. Advance 60 steps, using Step, and confirm simulated time `1.000 s`. The time you spend clicking is unrelated to this simulated duration.
+3. Resume and observe both counters. Rendering may run more or less frequently than updates; the displayed time always derives from the step count.
+4. If the tab is suspended or rendering stalls, returning may advance at most five catch-up updates in one callback. Additional elapsed time is discarded, so do not expect the simulation to catch up to a wall-clock stopwatch.
+
+For a controlled frequency comparison, run the existing schedule tests:
+
+```bash
+npm test -- --test-name-pattern='two seconds at'
+```
+
+Expected: the four tests for 30, 60, 120, and 144 Hz pass. Each drives the real application scheduler with synthetic timestamps and checks the complete population against 120 direct updates. This tests scheduling correctness, not the physical refresh rate of your monitor. See the [fixed-step clock](simulation.md#fixed-step-clock) for recovery limits.
+
 ## Further investigation
 
 Before changing an algorithm, state a hypothesis and choose a measurement. Examples include measuring how population size affects frame time, how sensor range changes available observations, or which geometries the edge-intersection collision method misses. Comparisons should use several recorded seeds; one successful car is not a controlled evaluation.
 
-Training, mutation, new traffic scenarios, and a time-based physics update are possible extensions. They need separate implementation and validation; none of these exercises adds them.
+Training, mutation, new traffic scenarios, and interpolated rendering are possible extensions. They need separate implementation and validation; none of these exercises adds them.

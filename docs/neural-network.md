@@ -81,9 +81,9 @@ Saving serializes activity arrays as well as parameters. Once inference runs, th
 
 ## Inspecting decisions step by step
 
-The **Leader telemetry** panel shows the current leader's ID, damage state, vertical position, and simulation step. Its inputs come from the first level's latest `inputs` array; the four outputs come from the last level's `outputs` array. Inputs are displayed to three decimal places. Those outputs are the controls calculated for the next movement update, rather than the controls that produced the current position.
+The **Leader telemetry** panel shows the current leader's ID, damage state, vertical position, simulation step, and simulated time (steps / 60). Its inputs come from the first level's latest `inputs` array; the four outputs come from the last level's `outputs` array. Inputs are displayed to three decimal places. Those outputs are the controls calculated for the next movement update, rather than the controls that produced the current position.
 
-Pause and use **Step** to follow one update at a time. At step zero, placeholders indicate that no new inference has run, even if the loaded JSON contains activity from a previous run. A damaged car still runs inference but remains motionless. No displayed activity changes the weights or biases.
+Pause and use **Step** to follow one fixed 1/60 s update at a time. Rendering callbacks without a complete step do not run new inference. At step zero, placeholders indicate that no new inference has run, even if the loaded JSON contains activity from a previous run. A damaged car still runs inference but remains motionless. No displayed activity changes the weights or biases.
 
 ## Reading the visualization
 

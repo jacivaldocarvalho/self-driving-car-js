@@ -7,12 +7,17 @@ const carCtx = carContainer.getContext("2d");
 const networkCtx = networkContainer.getContext("2d");
 const road = new Road(carContainer.width / 2, carContainer.width * 0.9);
 const N = 100;
+const FIXED_STEP_MS = 1000 / 60;
+const MAX_UPDATES_PER_FRAME = 5;
+const CLOCK_EPSILON_MS = 1e-7;
 let cars;
 let bestCar;
 let traffic;
 let paused = false;
 let simulationSteps = 0;
 let lastAnimationTime = 0;
+let lastFrameTime = null;
+let accumulatedTime = 0;
 let activeExperiment;
 let savedNetworkState;
 
@@ -28,6 +33,7 @@ function initializeSimulation(settings = { seed: 42, useSavedNetwork: true }) {
     traffic = [new Car(road.getLaneCenter(1), -100, 30, 50, "DUMMY", 2)];
     simulationSteps = 0;
     lastAnimationTime = 0;
+    resetFrameClock();
     showStatus("");
     savedNetworkState = settings.useSavedNetwork ? "none available" : "disabled";
     if (settings.useSavedNetwork) {
@@ -105,8 +111,14 @@ function generateCars(count, random = Math.random) {
     return generated;
 }
 
+function resetFrameClock() {
+    lastFrameTime = null;
+    accumulatedTime = 0;
+}
+
 function togglePause() {
     paused = !paused;
+    resetFrameClock();
     renderSimulation();
 }
 
@@ -156,6 +168,7 @@ function updateSimulation() {
     for (const car of cars) car.update(road.borders, traffic);
     bestCar = cars.reduce((leader, car) => car.y < leader.y ? car : leader);
     simulationSteps++;
+    lastAnimationTime = simulationSteps * FIXED_STEP_MS;
 }
 
 function updateTelemetry() {
@@ -167,6 +180,7 @@ function updateTelemetry() {
     setText("pauseButton", paused ? "Resume" : "Pause");
     document.getElementById("stepButton").disabled = !paused;
     setText("simulationState", `${paused ? "Paused" : "Running"} · Step ${simulationSteps}`);
+    setText("simulationTime", `Simulated time: ${(simulationSteps / 60).toFixed(3)} s`);
     setText("observedCar", `Car ${cars.indexOf(bestCar) + 1} · ${bestCar.damaged ? "Damaged" : "Active"} · y: ${bestCar.y.toFixed(2)}`);
     const inputs = bestCar.brain.levels[0].inputs;
     const outputs = bestCar.brain.levels[bestCar.brain.levels.length - 1].outputs;
@@ -202,9 +216,19 @@ function renderSimulation() {
 }
 
 function animate(time) {
-    if (!paused) {
-        updateSimulation();
-        lastAnimationTime = time;
+    if (!paused && Number.isFinite(time)) {
+        if (lastFrameTime !== null) {
+            const elapsed = Math.max(0, time - lastFrameTime);
+            accumulatedTime += Math.min(elapsed, FIXED_STEP_MS * MAX_UPDATES_PER_FRAME);
+            let updates = 0;
+            while (accumulatedTime + CLOCK_EPSILON_MS >= FIXED_STEP_MS &&
+                   updates < MAX_UPDATES_PER_FRAME) {
+                updateSimulation();
+                accumulatedTime = Math.max(0, accumulatedTime - FIXED_STEP_MS);
+                updates++;
+            }
+        }
+        lastFrameTime = time;
     }
     renderSimulation();
     requestAnimationFrame(animate);

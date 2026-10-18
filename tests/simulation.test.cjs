@@ -50,10 +50,15 @@ function start({ saved = null, fail = null } = {}) {
     return { context, data, status, assignments, frames, elements };
 }
 
+function advanceOneUpdate(app, time = 0) {
+    app.frames.shift()(time);
+    app.frames.shift()(time + 1000 / 60);
+}
+
 function savedNetwork() {
     const app = start();
     // Runtime inputs and outputs are populated before a user can save a network.
-    app.frames.shift()(0);
+    advanceOneUpdate(app);
     return vm.runInContext('JSON.stringify(cars[0].brain)', app.context);
 }
 
@@ -81,7 +86,7 @@ for (const [name, saved] of [
         const app = start({ saved });
         assert.match(app.status.textContent, /Could not load/);
         assert.equal(app.data.get('bestBrain'), saved);
-        assert.doesNotThrow(() => app.frames.shift()(0));
+        assert.doesNotThrow(() => advanceOneUpdate(app));
     });
 }
 
@@ -89,13 +94,13 @@ for (const fail of ['getItem', 'access']) {
     test(`starts and animates when storage fails at ${fail}`, () => {
         const app = start({ fail });
         assert.match(app.status.textContent, /Could not load/);
-        assert.doesNotThrow(() => app.frames.shift()(0));
+        assert.doesNotThrow(() => advanceOneUpdate(app));
     });
 }
 
 test('saving and removing change storage without replacing the active network', () => {
     const app = start();
-    app.frames.shift()(0);
+    advanceOneUpdate(app);
     const active = vm.runInContext('bestCar.brain', app.context);
     vm.runInContext('save()', app.context);
     assert.deepEqual(JSON.parse(app.data.get('bestBrain')), JSON.parse(JSON.stringify(active)));
@@ -112,22 +117,22 @@ for (const [fail, action, message] of [
 ]) {
     test(`reports ${fail} failure and preserves existing data`, () => {
         const app = start({ saved: valid, fail });
-        app.frames.shift()(0);
+        advanceOneUpdate(app);
         assert.doesNotThrow(() => vm.runInContext(action, app.context));
         assert.match(app.status.textContent, message);
         assert.equal(app.data.get('bestBrain'), valid);
     });
 }
 
-test('uses the frame timestamp and restores opacity for the leading car', () => {
+test('uses simulated time for network animation and restores leader opacity', () => {
     const app = start();
     assert.equal(app.assignments.length, 0);
     assert.equal(app.frames.length, 1);
-    app.frames.shift()(100);
-    assert.deepEqual(app.assignments.filter(([key]) => key === 'globalAlpha'), [
+    advanceOneUpdate(app, 100);
+    assert.deepEqual(app.assignments.filter(([key]) => key === 'globalAlpha').slice(-2), [
         ['globalAlpha', 0.2], ['globalAlpha', 1]
     ]);
-    assert.deepEqual(app.assignments.filter(([key]) => key === 'lineDashOffset'), [['lineDashOffset', -2]]);
+    assert.deepEqual(app.assignments.filter(([key]) => key === 'lineDashOffset').slice(-1), [['lineDashOffset', -(1000 / 60) / 50]]);
     assert.equal(app.frames.length, 1);
 });
 
@@ -145,7 +150,7 @@ test('pause before the first frame renders valid initial geometry without moving
     const app = start({ saved: valid });
     const initial = snapshot(app);
     assert.doesNotThrow(() => vm.runInContext('togglePause()', app.context));
-    app.frames.shift()(100);
+    advanceOneUpdate(app, 100);
     assert.equal(snapshot(app), initial);
     assert.equal(app.elements.pauseButton.textContent, 'Resume');
     assert.equal(app.elements.stepButton.disabled, false);
@@ -156,7 +161,7 @@ test('pause before the first frame renders valid initial geometry without moving
 
 test('paused callbacks freeze vehicles, sensors, network activity, and dash animation', () => {
     const app = start();
-    app.frames.shift()(100);
+    advanceOneUpdate(app, 100);
     vm.runInContext('togglePause()', app.context);
     const before = snapshot(app);
     const offset = vm.runInContext('networkCtx.lineDashOffset', app.context);
@@ -171,7 +176,7 @@ test('Step advances exactly one update only while paused', () => {
     const initial = snapshot(app);
     vm.runInContext('stepSimulation()', app.context);
     assert.equal(snapshot(app), initial);
-    app.frames.shift()(100);
+    advanceOneUpdate(app, 100);
     vm.runInContext('togglePause()', app.context);
     const beforeY = vm.runInContext('traffic[0].y', app.context);
     vm.runInContext('stepSimulation()', app.context);
@@ -180,17 +185,17 @@ test('Step advances exactly one update only while paused', () => {
     assert.equal(vm.runInContext('simulationSteps', app.context), 2);
     assert.equal(vm.runInContext('paused', app.context), true);
     const stepped = snapshot(app);
-    app.frames.shift()(200);
+    advanceOneUpdate(app, 200);
     assert.equal(snapshot(app), stepped);
     assert.equal(app.frames.length, 1);
 });
 
-test('resume updates once per callback without adding an animation loop', () => {
+test('resume starts a fresh clock without adding an animation loop', () => {
     const app = start();
     vm.runInContext('togglePause()', app.context);
-    app.frames.shift()(100);
+    advanceOneUpdate(app, 100);
     vm.runInContext('togglePause()', app.context);
-    app.frames.shift()(200);
+    advanceOneUpdate(app, 200);
     assert.equal(vm.runInContext('simulationSteps', app.context), 1);
     assert.equal(app.frames.length, 1);
     assert.equal(app.elements.pauseButton.textContent, 'Pause');
@@ -199,7 +204,7 @@ test('resume updates once per callback without adding an animation loop', () => 
 
 test('restart while paused resets positions and reloads the saved model without moving', () => {
     const app = start({ saved: valid });
-    app.frames.shift()(100);
+    advanceOneUpdate(app, 100);
     vm.runInContext('togglePause()', app.context);
     const oldCars = vm.runInContext('cars', app.context);
     const stored = app.data.get('bestBrain');
@@ -215,21 +220,21 @@ test('restart while paused resets positions and reloads the saved model without 
     assert.equal(app.elements.sensorInput0.textContent, '—');
 });
 
-test('restart while running preserves running mode and resumes on the next callback', () => {
+test('restart while running preserves running mode and resumes after a new clock baseline', () => {
     const app = start();
-    app.frames.shift()(100);
+    advanceOneUpdate(app, 100);
     vm.runInContext('restartSimulation()', app.context);
     assert.equal(vm.runInContext('simulationSteps', app.context), 0);
     assert.equal(vm.runInContext('paused', app.context), false);
     assert.equal(app.frames.length, 1);
-    app.frames.shift()(200);
+    advanceOneUpdate(app, 200);
     assert.equal(vm.runInContext('simulationSteps', app.context), 1);
 });
 
 test('telemetry follows the observed leader and displays its inputs and next controls', () => {
     const app = start();
     vm.runInContext('cars[1].y = -500;', app.context);
-    app.frames.shift()(100);
+    advanceOneUpdate(app, 100);
     assert.match(app.elements.observedCar.textContent, /^Car 2 · Active/);
     assert.equal(app.elements.simulationState.textContent, 'Running · Step 1');
     const brain = vm.runInContext('bestCar.brain', app.context);
@@ -348,7 +353,7 @@ test('disabled saved-model loading skips unavailable storage and preserves data'
         assert.equal(app.status.textContent, '');
         assert.match(app.elements.activeExperiment.textContent, /disabled/);
         assert.equal(app.data.get('bestBrain'), valid);
-        assert.doesNotThrow(() => app.frames.shift()(0));
+        assert.doesNotThrow(() => advanceOneUpdate(app));
     }
 });
 
@@ -384,4 +389,113 @@ test('both unsigned seed boundaries are accepted and normalized', () => {
         assert.match(app.elements.experimentStatus.textContent, /Settings applied/);
         assert.equal(app.status.textContent, '');
     }
+});
+
+
+for (const frequency of [30, 60, 120, 144]) {
+    test(`two seconds at ${frequency} Hz produce the same 120-step population`, () => {
+        const reference = start();
+        vm.runInContext('for(let i=0;i<120;i++) updateSimulation();', reference.context);
+        const app = start();
+        app.frames.shift()(0);
+        for (let i=1;i<=frequency*2;i++) app.frames.shift()(i * 1000 / frequency);
+        assert.equal(vm.runInContext('simulationSteps', app.context), 120);
+        assert.equal(snapshot(app), snapshot(reference));
+        assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 2.000 s');
+        assert.equal(app.frames.length, 1);
+    });
+}
+
+test('the first callback establishes time without advancing physics or inference', () => {
+    const app = start();
+    const initial = snapshot(app);
+    app.frames.shift()(10000);
+    assert.equal(snapshot(app), initial);
+    assert.equal(app.elements.sensorInput0.textContent, '—');
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.000 s');
+    app.frames.shift()(10000 + 1000/60);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+});
+
+test('substep callbacks accumulate without advancing before a complete step', () => {
+    const app = start();
+    app.frames.shift()(0);
+    app.frames.shift()(4);
+    app.frames.shift()(8);
+    app.frames.shift()(12);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 0);
+    app.frames.shift()(1000/60);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.017 s');
+});
+
+test('irregular callback intervals preserve a fixed one-second trajectory', () => {
+    const reference = start();
+    vm.runInContext('for(let i=0;i<60;i++) updateSimulation();', reference.context);
+    const app = start();
+    const intervals = [5,25,7,30,12,21];
+    let time = 0;
+    let index = 0;
+    app.frames.shift()(0);
+    while (time < 1000) {
+        time = Math.min(1000, time + intervals[index++ % intervals.length]);
+        app.frames.shift()(time);
+    }
+    assert.equal(snapshot(app), snapshot(reference));
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 1.000 s');
+});
+
+test('long stalls recover at most five steps and discard excess elapsed time', () => {
+    const app = start();
+    app.frames.shift()(0);
+    app.frames.shift()(10);
+    app.frames.shift()(10000);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 5);
+    const before = snapshot(app);
+    app.frames.shift()(10000);
+    assert.equal(snapshot(app), before);
+    app.frames.shift()(10000 + 1000/60);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 6);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.100 s');
+});
+
+test('pause and resume discard old fractional time and elapsed pause duration', () => {
+    const app = start();
+    app.frames.shift()(0);
+    app.frames.shift()(10);
+    vm.runInContext('togglePause()', app.context);
+    app.frames.shift()(100000);
+    vm.runInContext('togglePause()', app.context);
+    app.frames.shift()(200000);
+    app.frames.shift()(200010);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 0);
+    app.frames.shift()(200017);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+    assert.equal(app.frames.length, 1);
+});
+
+test('restart discards the previous frame baseline and fractional time', () => {
+    const app = start();
+    app.frames.shift()(0);
+    app.frames.shift()(10);
+    vm.runInContext('restartSimulation()', app.context);
+    app.frames.shift()(100000);
+    app.frames.shift()(100010);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 0);
+    app.frames.shift()(100017);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 1);
+});
+
+test('manual Step advances simulated time once and stays frozen across paused callbacks', () => {
+    const app = start();
+    vm.runInContext('togglePause(); stepSimulation();', app.context);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.017 s');
+    const before = snapshot(app);
+    app.frames.shift()(1000000);
+    app.frames.shift()(2000000);
+    assert.equal(snapshot(app), before);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.017 s');
+    vm.runInContext('stepSimulation()', app.context);
+    assert.equal(vm.runInContext('simulationSteps', app.context), 2);
+    assert.equal(app.elements.simulationTime.textContent, 'Simulated time: 0.033 s');
 });

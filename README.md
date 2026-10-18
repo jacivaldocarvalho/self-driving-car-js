@@ -47,14 +47,14 @@ The interface provides simulation controls and model persistence:
 | Button | Action |
 | --- | --- |
 | **Pause / Resume** | Freeze or continue simulation updates. Rendering continues so the page can resize. |
-| **Step** | While paused, advance exactly one simulation update. |
+| **Step** | While paused, advance exactly one simulation update (1/60 s). |
 | **Restart** | Apply the experiment settings, recreate the seeded population, and optionally load a compatible saved model into the first car, preserving the paused/running mode. |
 | **Save network** | Save the current leading car's network in `localStorage` under `bestBrain`, replacing any previous saved network. |
 | **Remove saved network** | Remove the saved network from `localStorage`. |
 
 Click **Restart** or reload the page to start another run. When **Use saved network** is enabled and a compatible saved network exists, it is loaded into the first car only; the other 99 cars keep their seeded networks. Saving or removing a network does not restart the current run or replace the active cars' networks. Saving is available after at least one update, so the stored network contains initialized activity arrays.
 
-The **Leader telemetry** panel identifies the observed car and simulation step, displays five sensor inputs rounded to three decimals, and shows four binary controls for the next update. Before the first update, values are shown as `—`; saved activity is not presented as a fresh observation. The leader can change, and a damaged leader's outputs do not make it move again. Parameters are not trained during execution.
+The **Leader telemetry** panel identifies the observed car, simulation step, and simulated time, displays five sensor inputs rounded to three decimals, and shows four binary controls for the next update. Before the first update, values are shown as `—`; saved activity is not presented as a fresh observation. The leader can change, and a damaged leader's outputs do not make it move again. Parameters are not trained during execution.
 
 Saved networks belong to the browser profile and origin. Changing the host, port, or protocol uses different storage. Nothing is uploaded to a backend.
 
@@ -64,11 +64,19 @@ Keyboard controls are implemented for cars created with the `KEYS` control type,
 
 The **Seed** field accepts whole decimal integers from `0` to `4294967295`. The default is `42`; **Use saved network** starts enabled. Edit either setting, then click **Restart** to apply it. The interface shows pending changes separately from the active seed and the saved-network status at the last restart. Invalid seeds leave the current run unchanged. Settings are kept in memory; a page reload restores the defaults.
 
-For a comparison that depends only on the seed, pause, disable **Use saved network**, choose a seed, and restart. Advance a known number of steps. Repeating with the same seed, configuration, code version, and browser engine reproduces the population and state at that step. Changing the seed creates a different population. Wall-clock timing and cross-engine bit-for-bit equality are not guaranteed.
+For a comparison that depends only on the seed, pause, disable **Use saved network**, choose a seed, and restart. Advance a known number of steps. Repeating with the same seed, configuration, code version, and browser engine reproduces the population and state at that step. Changing the seed creates a different population. The clock schedules 60 fixed updates per simulated second, independently of rendering frequency. Long stalls discard excess elapsed time, so simulated time may lag behind the wall clock. Cross-engine bit-for-bit equality is not guaranteed.
 
 With saved loading enabled, the saved parameters are another input to the experiment and must also match. Disabling loading does not delete stored data or disable the explicit Save/Remove actions. All 100 seeded networks are generated before optionally replacing the first one, so loading a model does not shift the other cars' random sequence. Invalid or unavailable saved data falls back to the seeded first controller.
 
 See [the reproducibility exercise](docs/experiments.md#7-repeat-a-seeded-experiment) for a step-by-step comparison.
+
+## Simulation clock
+
+Each physics update represents `1/60` second. A rendering callback may perform zero, one, or several updates based on elapsed time, then draw the most recent state. The first callback after startup, resume, or restart establishes a timestamp baseline without advancing the simulation. Pause freezes simulated time, and Step advances it by exactly `1/60` second.
+
+Recovery is limited to five updates per callback: no more than about `83.333 ms` of that callback's elapsed interval is accepted. Extra elapsed time is discarded, while an accepted fractional step is carried forward. Pausing and restarting clear that fractional time. This prevents long catch-up loops after a stall or a background-tab interval. Compare experiments using the displayed simulated time (`steps / 60`), not wall-clock waiting time.
+
+See [the timing guide](docs/simulation.md#fixed-step-clock) for the scheduling details.
 
 ## Project structure
 
@@ -119,7 +127,7 @@ npm test
 
 `npm ci` installs the locked development dependencies for ESLint. Node.js and these dependencies are only needed for development checks; the browser runtime remains dependency-free. ESLint uses its recommended error-detection rules, with the shared globals of the classic browser scripts declared explicitly. It does not enforce formatting.
 
-Tests execute the application scripts using Node's built-in test runner and VM, with browser APIs replaced by test doubles where needed. They cover geometry, sensor readings, neural network inference, collisions, saved network compatibility, invalid data, unavailable storage, save/remove actions, animation rendering settings, pause/resume, single-step updates, restart, leader telemetry, seeded reproduction, and saved-model selection. They do not replace visual browser checks.
+Tests execute the application scripts using Node's built-in test runner and VM, with browser APIs replaced by test doubles where needed. They cover geometry, sensor readings, neural network inference, collisions, saved network compatibility, invalid data, unavailable storage, save/remove actions, animation rendering settings, pause/resume, single-step updates, restart, leader telemetry, seeded reproduction, saved-model selection, fixed-step schedules at 30/60/120/144 Hz, and bounded recovery after stalls. They do not replace visual browser checks.
 
 `quality.yml` runs lint and tests on Node.js 24 for pushes to `main` and `feat/interactive-learning`, and pull requests targeting `main`. It validates changes without deploying the site.
 
@@ -127,7 +135,7 @@ To check changes manually:
 
 1. Open the page and check the browser console for errors.
 2. Confirm that the road, cars, sensor rays, and neural network are rendered and the simulation advances.
-3. Pause, note the step counter and car positions, and confirm that they remain fixed. Use **Step** to advance once; resume to continue.
+3. Pause, note the step counter, simulated time, and car positions, and confirm that they remain fixed. Use **Step** to advance once; resume to continue.
 4. Restart while paused and confirm step `0`, initial positions, and `—` telemetry; advance once to populate the panel.
 5. Click **Save network** and inspect the `bestBrain` entry in the browser's developer tools under local storage.
 6. Restart and confirm that the first car receives the saved network.
@@ -140,8 +148,8 @@ Pseudo-random networks can produce cars that remain still, reverse, or collide. 
 - Saving and enabled model loading require browser storage access. If loading fails or a saved network is incompatible, the simulation continues with a new network and displays a status message. Existing stored data is retained until you explicitly save or remove it.
 - Network validation checks dimensions and finite numeric values, not driving quality.
 - On narrow screens, the telemetry panel and network visualization appear below the road; scroll to view them.
-- Physics remains frame-based: one running animation callback or one paused Step advances one update. Refresh-rate independence is not implemented yet.
-- The simulation uses a single traffic vehicle and simplified, frame-based physics. It is an educational model, unsuitable for real vehicle control.
+- The clock discards elapsed time beyond its catch-up limit; simulated time may diverge from wall-clock time during slow frames or background-tab intervals. Rendering uses the latest state without interpolation.
+- The simulation uses a single traffic vehicle and simplified physics with fixed updates. It is an educational model, unsuitable for real vehicle control.
 
 ## Contributing
 
