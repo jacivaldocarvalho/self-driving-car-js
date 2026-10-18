@@ -48,7 +48,7 @@ button:disabled {
     cursor: default;
 }
 
-button:focus-visible {
+button:focus-visible, input:focus-visible {
     outline: 3px solid #111c9c;
     outline-offset: 2px;
 }
@@ -117,12 +117,12 @@ th, td {
 
     #networkContainer {
         grid-column: 2;
-        grid-row: 2;
+        grid-row: 3;
     }
 
     #networkTelemetry {
         grid-column: 1 / -1;
-        grid-row: 3;
+        grid-row: 4;
     }
 }
 
@@ -138,6 +138,45 @@ th, td {
 
     #networkContainer {
         grid-column: 1;
-        grid-row: 4;
+        grid-row: 5;
     }
+}
+
+
+#experimentSettings {
+    grid-column: 1 / -1;
+    min-width: 0;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid #385c4d;
+    border-radius: 5px;
+    background: #eef5f1;
+}
+
+.settingsFields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+#seedInput {
+    box-sizing: border-box;
+    width: 140px;
+    max-width: 100%;
+    padding: 8px;
+    font: inherit;
+}
+
+.checkboxLabel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#experimentSettings p {
+    margin: 8px 0 0;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
 }

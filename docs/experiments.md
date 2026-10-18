@@ -84,11 +84,11 @@ Explain why watching the leading network's changing colors is insufficient evide
 
 1. Note the current behavior, then click **Save network**. This intentionally replaces any previously saved network; skip this exercise if you want to retain it.
 2. Inspect `bestBrain` in developer tools under the page's local storage.
-3. Click **Restart** using the same host, port, protocol, and browser profile.
+3. Enable **Use saved network**, then click **Restart** using the same host, port, protocol, and browser profile.
 4. Inspect `cars[0].brain.levels` and compare its weights and biases with the saved data. Activity arrays can differ after inference.
 5. Compare `bestCar === cars[0]` in the console.
 
-Expected: the saved parameters are loaded into the first car, but another randomly initialized car may become the leader. Saving does not mutate the remaining 99 networks or start another generation. Identical parameters also do not guarantee identical wall-clock behavior on different displays because physics advances per callback.
+Expected: the saved parameters are loaded into the first car, but another seeded car may become the leader. Saving does not mutate the remaining 99 networks or start another generation. Identical parameters also do not guarantee identical wall-clock behavior on different displays because physics advances per callback.
 
 **Remove saved network** removes the stored controller for the next reload; it does not reset the active cars until you restart. See the persistence cases in [simulation tests](../tests/simulation.test.cjs).
 
@@ -117,8 +117,39 @@ Read the `getItem`, storage-access, `setItem`, and `removeItem` failure cases in
 
 Pausing does not train, reset, or save a model. The tests in [simulation.test.cjs](../tests/simulation.test.cjs) cover freezing, exact single-step behavior, restart, and telemetry correspondence.
 
+## 7. Repeat a seeded experiment
+
+1. Pause the simulation, set **Seed** to `2026`, and disable **Use saved network**. Note the pending-changes message: the active run has not changed yet.
+2. Click **Restart**. Confirm active seed `2026`, saved loading `disabled`, and step `0`.
+3. Click **Step** ten times. In developer tools, copy this snapshot to a temporary variable:
+
+```js
+var referenceSnapshot = JSON.stringify(cars.map(car => ({
+    x: car.x, y: car.y, speed: car.speed, angle: car.angle,
+    damaged: car.damaged, controls: car.controls,
+    levels: car.brain.levels
+})));
+```
+
+4. Restart without editing settings, advance ten steps again, and compare:
+
+```js
+console.log('Same state:', referenceSnapshot === JSON.stringify(cars.map(car => ({
+    x: car.x, y: car.y, speed: car.speed, angle: car.angle,
+    damaged: car.damaged, controls: car.controls,
+    levels: car.brain.levels
+}))));
+```
+
+Expected: `Same state: true` in the same code version and browser engine. The console variable contains a copied string; restarting the simulation does not clear it. A page reload does clear it and restores the default experiment settings.
+
+5. Change the seed to `2027` without restarting. The active-seed label stays at `2026`; after restarting and advancing ten steps, the snapshot differs because the initialized parameters differ.
+6. Try an empty or out-of-range seed. Restart reports the error and retains the current run.
+
+With **Use saved network** enabled, repeatability also requires unchanged saved parameters. This exercise disables loading without removing your saved controller. Population size, road, traffic, and update rules must match as well. The [simulation tests](../tests/simulation.test.cjs) compare the full population after 120 updates, with and without a saved model.
+
 ## Further investigation
 
-Before changing an algorithm, state a hypothesis and choose a measurement. Examples include measuring how population size affects frame time, how sensor range changes available observations, or which geometries the edge-intersection collision method misses. Random runs require repeated observations; one successful car is not a controlled evaluation.
+Before changing an algorithm, state a hypothesis and choose a measurement. Examples include measuring how population size affects frame time, how sensor range changes available observations, or which geometries the edge-intersection collision method misses. Comparisons should use several recorded seeds; one successful car is not a controlled evaluation.
 
 Training, mutation, new traffic scenarios, and a time-based physics update are possible extensions. They need separate implementation and validation; none of these exercises adds them.

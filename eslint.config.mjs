@@ -4,6 +4,7 @@ const scriptExports = {
     car: ['Car'],
     controls: ['Controls'],
     network: ['NeuralNetwork'],
+    random: ['createSeededRandom'],
     road: ['Road'],
     sensor: ['Sensor'],
     visualizer: ['Visualizer'],

@@ -13,27 +13,39 @@ let traffic;
 let paused = false;
 let simulationSteps = 0;
 let lastAnimationTime = 0;
+let activeExperiment;
+let savedNetworkState;
 
 initializeSimulation();
 requestAnimationFrame(animate);
 
-function initializeSimulation() {
-    cars = generateCars(N);
+function initializeSimulation(settings = { seed: 42, useSavedNetwork: true }) {
+    activeExperiment = { ...settings };
+    document.getElementById("seedInput").value = String(settings.seed);
+    document.getElementById("useSavedNetwork").checked = settings.useSavedNetwork;
+    cars = generateCars(N, createSeededRandom(settings.seed));
     bestCar = cars[0];
     traffic = [new Car(road.getLaneCenter(1), -100, 30, 50, "DUMMY", 2)];
     simulationSteps = 0;
     lastAnimationTime = 0;
     showStatus("");
-    try {
-        const savedBrain = localStorage.getItem("bestBrain");
-        if (savedBrain !== null) {
-            const brain = JSON.parse(savedBrain);
-            if (!isValidBrain(brain, bestCar.brain)) throw new Error("Invalid network structure");
-            bestCar.brain = brain;
+    savedNetworkState = settings.useSavedNetwork ? "none available" : "disabled";
+    if (settings.useSavedNetwork) {
+        try {
+            const savedBrain = localStorage.getItem("bestBrain");
+            if (savedBrain !== null) {
+                const brain = JSON.parse(savedBrain);
+                if (!isValidBrain(brain, bestCar.brain)) throw new Error("Invalid network structure");
+                bestCar.brain = brain;
+                savedNetworkState = "loaded";
+            }
+        } catch {
+            savedNetworkState = "invalid or unavailable";
+            showStatus("Could not load the saved network. Using a new network; saved data was not changed.");
         }
-    } catch {
-        showStatus("Could not load the saved network. Using a new network; saved data was not changed.");
     }
+    document.getElementById("activeExperiment").textContent =
+        `Active seed: ${settings.seed} · Saved network at restart: ${savedNetworkState}`;
     updateTelemetry();
 }
 
@@ -45,7 +57,7 @@ function save() {
     }
     try {
         localStorage.setItem("bestBrain", JSON.stringify(bestCar.brain));
-        showStatus("Network saved. Restart to use it in the first car.");
+        showStatus("Network saved. Enable Use saved network and restart to use it in the first car.");
     } catch {
         showStatus("Could not save the network. Browser storage may be unavailable or full.");
     }
@@ -55,7 +67,7 @@ function save() {
 function discard() {
     try {
         localStorage.removeItem("bestBrain");
-        showStatus("Saved network removed. Restart to start with new networks.");
+        showStatus("Saved network removed. Restart to use only the seeded networks.");
     } catch {
         showStatus("Could not remove the saved network. Browser storage may be unavailable.");
     }
@@ -85,10 +97,10 @@ function isValidBrain(brain, expectedBrain) {
 }
 
 // Gera N carros.
-function generateCars(count) {
+function generateCars(count, random = Math.random) {
     const generated = [];
     for (let i = 0; i < count; i++) {
-        generated.push(new Car(road.getLaneCenter(1), 100, 30, 50, "AI"));
+        generated.push(new Car(road.getLaneCenter(1), 100, 30, 50, "AI", 3, random));
     }
     return generated;
 }
@@ -104,8 +116,36 @@ function stepSimulation() {
     renderSimulation();
 }
 
+function readExperimentSettings() {
+    const rawSeed = document.getElementById("seedInput").value.trim();
+    const seed = Number(rawSeed);
+    if (!/^\d+$/.test(rawSeed) || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
+        return null;
+    }
+    return { seed, useSavedNetwork: document.getElementById("useSavedNetwork").checked };
+}
+
+function updateExperimentSettings() {
+    const settings = readExperimentSettings();
+    let message = "Settings applied. Change values, then Restart to apply them.";
+    if (settings === null) {
+        message = "Enter a whole-number seed from 0 to 4294967295. The active run is unchanged.";
+    } else if (settings.seed !== activeExperiment.seed ||
+               settings.useSavedNetwork !== activeExperiment.useSavedNetwork) {
+        message = "Pending changes — click Restart to apply.";
+    }
+    const status = document.getElementById("experimentStatus");
+    if (status.textContent !== message) status.textContent = message;
+}
+
 function restartSimulation() {
-    initializeSimulation();
+    const settings = readExperimentSettings();
+    if (settings === null) {
+        showStatus("Could not restart. Enter a whole-number seed from 0 to 4294967295.");
+        updateExperimentSettings();
+        return;
+    }
+    initializeSimulation(settings);
     renderSimulation();
 }
 
@@ -119,6 +159,7 @@ function updateSimulation() {
 }
 
 function updateTelemetry() {
+    updateExperimentSettings();
     const setText = (id, text) => {
         const element = document.getElementById(id);
         if (element.textContent !== text) element.textContent = text;

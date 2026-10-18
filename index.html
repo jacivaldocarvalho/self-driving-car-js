@@ -19,6 +19,19 @@
             <button onclick="save()">Save network</button>
             <button onclick="discard()">Remove saved network</button>
         </div>
+        <fieldset id="experimentSettings">
+            <legend>Experiment settings</legend>
+            <div class="settingsFields">
+                <label for="seedInput">Seed</label>
+                <input id="seedInput" type="text" inputmode="numeric" pattern="[0-9]{1,10}"
+                    maxlength="10" value="42" aria-describedby="seedHelp" oninput="updateExperimentSettings()">
+                <label class="checkboxLabel"><input id="useSavedNetwork" type="checkbox" checked
+                    onchange="updateExperimentSettings()"> Use saved network</label>
+            </div>
+            <p id="seedHelp">Whole number from 0 to 4294967295. Changes apply on Restart.</p>
+            <p id="activeExperiment"></p>
+            <p id="experimentStatus" role="status"></p>
+        </fieldset>
         <canvas id="carContainer" aria-label="Road and cars"></canvas>
         <section id="networkTelemetry" aria-labelledby="telemetryTitle">
             <h1 id="telemetryTitle">Leader telemetry</h1>
@@ -52,6 +65,7 @@
     </main>
 
     <script src="assets/js/visualizer.js"></script>
+    <script src="assets/js/random.js"></script>
     <script src="assets/js/network.js"></script>
     <script src="assets/js/sensor.js"></script>
     <script src="assets/js/utils.js"></script>

@@ -6,7 +6,7 @@
 
 A feedforward network passes values through successive layers. Each output combines weighted inputs with a bias convention and an activation function. Outputs from one layer become inputs to the next. For the general model, see Poole and Mackworth's [Feedforward Neural Networks](https://www.cs.ubc.ca/~poole/aibook/3e/html/ArtInt3e.Ch8.S1.html).
 
-In this repository, [Car](../assets/js/car.js) constructs `NeuralNetwork([this.sensor.rayCount, 6, 4])`. With the default five rays, the shape is:
+In this repository, [Car](../assets/js/car.js) constructs `NeuralNetwork([this.sensor.rayCount, 6, 4], random)`, passing the experiment's random source. With the default five rays, the shape is:
 
 ```mermaid
 flowchart LR
@@ -55,7 +55,7 @@ Both hidden and output units use this hard binary step. There is no sigmoid, ReL
 
 ## Initialization, inference, and learning
 
-`Level.#randomize()` initializes every weight and threshold with `Math.random() * 2 - 1`, giving values in `[-1, 1)`. Each car gets a separate network. `NeuralNetwork.feedForward()` then evaluates the two levels in sequence on every update.
+`Level.#randomize()` initializes every weight and threshold with `random() * 2 - 1`, giving values in `[-1, 1)`. The running simulation supplies a seeded random function through `Car`, `NeuralNetwork`, and `Level`. Existing constructor calls that omit it still default to `Math.random`. Each car gets a separate network. `NeuralNetwork.feedForward()` then evaluates the two levels in sequence on every update.
 
 Inference overwrites the `inputs` and `outputs` activity arrays, but leaves weights and biases unchanged. Changing colors in the visualizer reflects current activity, not parameter learning.
 
@@ -63,11 +63,19 @@ Parameter learning is a separate operation. For example, gradient-based learning
 
 The project has no loss function, target labels, reward-driven update, optimizer, or mutation method. Selecting the car with the smallest `y` is a ranking step; saving it retains its parameters. An evolutionary extension would need an explicit process for creating and evaluating new candidate parameters, which is not implemented.
 
+## Seeded initialization
+
+[random.js](../assets/js/random.js) implements the 32-bit SplitMix variant documented in [bryc's public-domain PRNG implementations](https://github.com/bryc/code/blob/master/jshash/PRNGs.md#splitmix32). It advances an unsigned 32-bit state, mixes bits using shifts and integer multiplication, and maps the result to `[0, 1)`. A seed identifies the initial state; restarting it reproduces the sequence. The generator is for repeatable educational experiments, not cryptography.
+
+One generator supplies all 64 parameters of each car, in population order. `Math.random` is not replaced globally. Reproduction depends on the algorithm, parameter-consumption order, and code version; a seed is not a portable trained-model format. See [random tests](../tests/random.test.cjs) for a pinned sequence and injected-source checks.
+
 ## Persistence and compatibility
 
-[main.js](../assets/js/main.js) saves the leader's network as JSON under `bestBrain`. Restarting or reloading applies a compatible saved model to the first car only. The other cars receive fresh random parameters, so a saved first car may not remain the leader.
+[main.js](../assets/js/main.js) saves the leader's network as JSON under `bestBrain`. When saved loading is enabled, restarting or reloading applies a compatible saved model to the first car only. The other cars keep their seeded parameters, so a saved first car may not remain the leader.
 
-`isValidBrain()` compares the loaded model to a fresh network's expected dimensions. It checks the number of levels, vector and matrix sizes, and finite numeric values. Invalid data or storage access errors leave the fresh model active and show a status message. Validation does not assess driving quality.
+`isValidBrain()` compares the loaded model to a fresh network's expected dimensions. It checks the number of levels, vector and matrix sizes, and finite numeric values. Invalid data or storage access errors leave the seeded model active and show a status message. Validation does not assess driving quality.
+
+Disabling **Use saved network** skips the storage read entirely and retains saved data. Reproducing an experiment with loading enabled also requires the same saved parameters; the seed alone cannot reproduce that controller.
 
 Saving serializes activity arrays as well as parameters. Once inference runs, those activity arrays are overwritten using new observations. Removing stored data affects the next restart or reload; it does not reset the active simulation.
 

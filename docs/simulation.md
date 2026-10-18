@@ -18,9 +18,9 @@ When running, `animate()` in [main.js](../assets/js/main.js) calls `updateSimula
 2. Update every AI car against the road borders and traffic polygons.
 3. Select the first car whose `y` equals the smallest `y` in the population.
 
-Rendering draws the road, traffic, cars, leader's sensors, and leader's neural network, then refreshes the telemetry panel. `animate()` always requests one next animation callback. While paused, it skips updates and keeps the dash animation frozen, but redraws for layout changes. **Step** performs exactly one update and redraw while remaining paused. **Restart** recreates the population, reloads a valid saved model into the first car, and resets the step counter without changing the pause mode or creating another callback loop.
+Rendering draws the road, traffic, cars, leader's sensors, and leader's neural network, then refreshes the telemetry panel. `animate()` always requests one next animation callback. While paused, it skips updates and keeps the dash animation frozen, but redraws for layout changes. **Step** performs exactly one update and redraw while remaining paused. **Restart** recreates the population, applies the seed and optional saved-model loading, and resets the step counter without changing the pause mode or creating another callback loop.
 
-The constructor now creates each car's initial polygon, so drawing a paused step-zero state does not require movement. At step zero, sensors and inference have not run; telemetry shows `—`, and the network canvas displays a prompt instead of stale saved activity.
+The constructor creates each car's initial polygon, so drawing a paused step-zero state does not require movement. At step zero, sensors and inference have not run; telemetry shows `—`, and the network canvas displays a prompt instead of stale saved activity.
 
 Inside `Car.update()`, an undamaged car moves using its existing controls, builds its polygon, and checks damage. Its sensors then read the environment, and its network calculates controls for the next update. The first movement update therefore uses the initially false AI controls. Damaged cars keep updating sensors and inference, but their movement and polygon stop updating.
 
@@ -35,6 +35,12 @@ flowchart LR
 ```
 
 The leader is a position-based selection. There is no safety score or automatic restart, and damaged cars remain eligible. The 100 cars are processed in ordinary JavaScript loops, without worker threads. AI cars do not sense or collide with one another because the `traffic` array contains only the traffic vehicle.
+
+## Repeatable initial conditions
+
+`initializeSimulation()` creates a fresh generator from the applied seed and passes it through `generateCars()` to each car's neural network. A restart with unchanged seed, saved-model input, and code version therefore recreates the same initial parameters and positions. Pending field edits do not affect an active run. Seed validation happens before replacing its population.
+
+The simulation consumes randomness during network initialization, not while moving. Compare states after equal update counts, using the same browser engine; frame-based wall-clock motion and cross-engine floating-point equality are separate concerns. See the [reproducibility exercise](experiments.md#7-repeat-a-seeded-experiment).
 
 ## Vehicle movement
 
