@@ -3,30 +3,31 @@ body {
     padding: 8px;
     background: #769c8f;
     font-family: sans-serif;
+    color: #14251f;
 }
 
 #simulation {
     display: grid;
-    grid-template-columns: minmax(0, 200px) minmax(0, auto) minmax(0, 300px);
-    gap: 8px;
-    align-items: center;
+    grid-template-columns: minmax(0, 200px) minmax(220px, 300px) minmax(0, 300px);
+    gap: 12px;
+    align-items: start;
     justify-content: center;
-    max-width: 700px;
+    max-width: 824px;
     margin: auto;
 }
 
 #storageStatus {
     min-height: 2.5em;
-    max-width: 700px;
+    max-width: 824px;
     margin: 0 auto 8px;
     font-size: 0.875rem;
 }
 
 #verticalButtons {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 8px;
-    min-width: 0;
+    grid-column: 1 / -1;
 }
 
 button {
@@ -34,12 +35,17 @@ button {
     overflow-wrap: anywhere;
     border: none;
     border-radius: 5px;
-    padding: 8px;
+    padding: 10px;
     cursor: pointer;
 }
 
-button:hover {
+button:hover:not(:disabled) {
     background: #d5e3ff;
+}
+
+button:disabled {
+    opacity: 0.55;
+    cursor: default;
 }
 
 button:focus-visible {
@@ -61,14 +67,77 @@ canvas {
     background: black;
 }
 
-@media (max-width: 640px) {
+#networkTelemetry {
+    padding: 12px;
+    border-radius: 5px;
+    background: #eef5f1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+#telemetryTitle {
+    margin-top: 0;
+    font-size: 1.25rem;
+}
+
+#networkTelemetry p {
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+}
+
+caption {
+    text-align: left;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+th, td {
+    text-align: left;
+    padding: 5px 3px;
+    border-bottom: 1px solid #c6d8ce;
+}
+
+.hint {
+    margin-bottom: 0;
+}
+
+@media (max-width: 860px) {
     #simulation {
-        grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
-        max-width: 400px;
+        grid-template-columns: minmax(0, 200px) minmax(0, 300px);
+        max-width: 512px;
     }
 
     #networkContainer {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    #networkTelemetry {
         grid-column: 1 / -1;
+        grid-row: 3;
+    }
+}
+
+@media (max-width: 560px) {
+    #simulation {
+        grid-template-columns: minmax(0, 1fr);
+        max-width: 400px;
+    }
+
+    #carContainer, #networkContainer {
         justify-self: center;
+    }
+
+    #networkContainer {
+        grid-column: 1;
+        grid-row: 4;
     }
 }

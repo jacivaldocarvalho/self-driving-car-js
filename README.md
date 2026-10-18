@@ -42,14 +42,19 @@ Then open `http://127.0.0.1:8000`. Browser storage behavior for files opened thr
 
 ## Controls and saved networks
 
-The interface provides two actions:
+The interface provides simulation controls and model persistence:
 
 | Button | Action |
 | --- | --- |
+| **Pause / Resume** | Freeze or continue simulation updates. Rendering continues so the page can resize. |
+| **Step** | While paused, advance exactly one simulation update. |
+| **Restart** | Create a new population and reload a compatible saved model into the first car, preserving the paused/running mode. |
 | **Save network** | Save the current leading car's network in `localStorage` under `bestBrain`, replacing any previous saved network. |
 | **Remove saved network** | Remove the saved network from `localStorage`. |
 
-Reload the page to start another run. When a saved network exists, it is loaded into the first car only; the other 99 cars keep newly randomized networks. Saving or removing a network does not restart the current run or replace the active cars' networks.
+Click **Restart** or reload the page to start another run. When a saved network exists, it is loaded into the first car only; the other 99 cars keep newly randomized networks. Saving or removing a network does not restart the current run or replace the active cars' networks. Saving is available after at least one update, so the stored network contains initialized activity arrays.
+
+The **Leader telemetry** panel identifies the observed car and simulation step, displays five sensor inputs rounded to three decimals, and shows four binary controls for the next update. Before the first update, values are shown as `—`; saved activity is not presented as a fresh observation. The leader can change, and a damaged leader's outputs do not make it move again. Parameters are not trained during execution.
 
 Saved networks belong to the browser profile and origin. Changing the host, port, or protocol uses different storage. Nothing is uploaded to a backend.
 
@@ -102,17 +107,19 @@ npm test
 
 `npm ci` installs the locked development dependencies for ESLint. Node.js and these dependencies are only needed for development checks; the browser runtime remains dependency-free. ESLint uses its recommended error-detection rules, with the shared globals of the classic browser scripts declared explicitly. It does not enforce formatting.
 
-Tests execute the application scripts using Node's built-in test runner and VM, with browser APIs replaced by test doubles where needed. They cover geometry, sensor readings, neural network inference, collisions, saved network compatibility, invalid data, unavailable storage, save/remove actions, and animation rendering settings. They do not replace visual browser checks.
+Tests execute the application scripts using Node's built-in test runner and VM, with browser APIs replaced by test doubles where needed. They cover geometry, sensor readings, neural network inference, collisions, saved network compatibility, invalid data, unavailable storage, save/remove actions, animation rendering settings, pause/resume, single-step updates, restart, and leader telemetry. They do not replace visual browser checks.
 
-`quality.yml` runs lint and tests on Node.js 24 for pushes to `main` and `chore/educational-project-modernization`, and pull requests targeting `main`. It validates changes without deploying the site.
+`quality.yml` runs lint and tests on Node.js 24 for pushes to `main` and `feat/interactive-learning`, and pull requests targeting `main`. It validates changes without deploying the site.
 
 To check changes manually:
 
 1. Open the page and check the browser console for errors.
 2. Confirm that the road, cars, sensor rays, and neural network are rendered and the simulation advances.
-3. Click **Save network** and inspect the `bestBrain` entry in the browser's developer tools under local storage.
-4. Reload and confirm that the first car receives the saved network.
-5. Click **Remove saved network**, confirm that the storage entry disappears, and reload to start with newly randomized networks.
+3. Pause, note the step counter and car positions, and confirm that they remain fixed. Use **Step** to advance once; resume to continue.
+4. Restart while paused and confirm step `0`, initial positions, and `—` telemetry; advance once to populate the panel.
+5. Click **Save network** and inspect the `bestBrain` entry in the browser's developer tools under local storage.
+6. Restart and confirm that the first car receives the saved network.
+7. Click **Remove saved network**, confirm that the storage entry disappears, and reload to start with newly randomized networks.
 
 Random networks can produce cars that remain still, reverse, or collide. Successful obstacle avoidance is not guaranteed.
 
@@ -120,7 +127,8 @@ Random networks can produce cars that remain still, reverse, or collide. Success
 
 - Saving and loading require browser storage access. If loading fails or a saved network is incompatible, the simulation continues with a new network and displays a status message. Existing stored data is retained until you explicitly save or remove it.
 - Network validation checks dimensions and finite numeric values, not driving quality.
-- On narrow screens, the network visualization appears below the road; scroll to view it.
+- On narrow screens, the telemetry panel and network visualization appear below the road; scroll to view them.
+- Physics remains frame-based: one running animation callback or one paused Step advances one update. Refresh-rate independence is not implemented yet.
 - The simulation uses a single traffic vehicle and simplified, frame-based physics. It is an educational model, unsuitable for real vehicle control.
 
 ## Contributing

@@ -56,7 +56,7 @@ Try a negative weight or a larger threshold and calculate the result before runn
 
 **Question:** Do weights change while a car is running?
 
-Inspect a fixed car rather than `bestCar`, because the leader can change. This example compares parameters across animation callbacks:
+Inspect a fixed car rather than `bestCar`, because the leader can change. Keep the simulation running for this example, which compares parameters across animation callbacks:
 
 ```js
 {
@@ -84,13 +84,13 @@ Explain why watching the leading network's changing colors is insufficient evide
 
 1. Note the current behavior, then click **Save network**. This intentionally replaces any previously saved network; skip this exercise if you want to retain it.
 2. Inspect `bestBrain` in developer tools under the page's local storage.
-3. Reload using the same host, port, protocol, and browser profile.
+3. Click **Restart** using the same host, port, protocol, and browser profile.
 4. Inspect `cars[0].brain.levels` and compare its weights and biases with the saved data. Activity arrays can differ after inference.
 5. Compare `bestCar === cars[0]` in the console.
 
 Expected: the saved parameters are loaded into the first car, but another randomly initialized car may become the leader. Saving does not mutate the remaining 99 networks or start another generation. Identical parameters also do not guarantee identical wall-clock behavior on different displays because physics advances per callback.
 
-**Remove saved network** removes the stored controller for the next reload; it does not reset the active cars. See the persistence cases in [simulation tests](../tests/simulation.test.cjs).
+**Remove saved network** removes the stored controller for the next reload; it does not reset the active cars until you restart. See the persistence cases in [simulation tests](../tests/simulation.test.cjs).
 
 ## 5. Study failed storage using isolated tests
 
@@ -105,6 +105,17 @@ npm test -- --test-name-pattern='recovers from'
 Expected: the selected tests pass. They use an in-memory storage double, verify that invalid data remains unchanged, and run an animation callback with a fresh network. They cover malformed JSON, missing or mismatched structure, and invalid numeric values.
 
 Read the `getItem`, storage-access, `setItem`, and `removeItem` failure cases in [simulation tests](../tests/simulation.test.cjs) to follow how failures become status messages. A passing storage-double test does not prove compatibility with every browser privacy mode.
+
+## 6. Pause and inspect a control decision
+
+1. Click **Pause** and note the **Step** counter and observed car ID.
+2. Wait and confirm that the counter, positions, inputs, and outputs stay fixed.
+3. Click **Step** once. The counter increases by one, and telemetry reflects the resulting observation and inference. A car may remain still depending on its controls or damage state.
+4. Read the **Controls for the next update** table, then step again. Movement uses those previous controls before new inference replaces them.
+5. Check the observed car ID after each step: the position-based leader may change.
+6. Click **Restart** while paused. Expect step `0`, initial positions, and `—` values until the first new update. Resume to continue.
+
+Pausing does not train, reset, or save a model. The tests in [simulation.test.cjs](../tests/simulation.test.cjs) cover freezing, exact single-step behavior, restart, and telemetry correspondence.
 
 ## Further investigation
 

@@ -12,12 +12,42 @@
 
     <p id="storageStatus" role="status" aria-live="polite"></p>
     <main id="simulation" aria-label="Driving simulation">
-        <canvas id="carContainer" aria-label="Road and cars"></canvas>
-        <div id="verticalButtons">
+        <div id="verticalButtons" role="group" aria-label="Simulation controls">
+            <button id="pauseButton" onclick="togglePause()">Pause</button>
+            <button id="stepButton" onclick="stepSimulation()" disabled>Step</button>
+            <button onclick="restartSimulation()">Restart</button>
             <button onclick="save()">Save network</button>
             <button onclick="discard()">Remove saved network</button>
         </div>
-
+        <canvas id="carContainer" aria-label="Road and cars"></canvas>
+        <section id="networkTelemetry" aria-labelledby="telemetryTitle">
+            <h1 id="telemetryTitle">Leader telemetry</h1>
+            <p id="simulationState"></p>
+            <p id="observedCar"></p>
+            <p>Inference only — parameters are not being trained.</p>
+            <table>
+                <caption>Sensor inputs (proximity: 0–1)</caption>
+                <thead><tr><th scope="col">Ray</th><th scope="col">Input</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row">Left</th><td id="sensorInput0">—</td></tr>
+                    <tr><th scope="row">Forward-left</th><td id="sensorInput1">—</td></tr>
+                    <tr><th scope="row">Center</th><td id="sensorInput2">—</td></tr>
+                    <tr><th scope="row">Forward-right</th><td id="sensorInput3">—</td></tr>
+                    <tr><th scope="row">Right</th><td id="sensorInput4">—</td></tr>
+                </tbody>
+            </table>
+            <table>
+                <caption>Controls for the next update</caption>
+                <thead><tr><th scope="col">Action</th><th scope="col">Output</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row">Forward</th><td id="controlOutput0">—</td></tr>
+                    <tr><th scope="row">Left</th><td id="controlOutput1">—</td></tr>
+                    <tr><th scope="row">Right</th><td id="controlOutput2">—</td></tr>
+                    <tr><th scope="row">Reverse</th><td id="controlOutput3">—</td></tr>
+                </tbody>
+            </table>
+            <p class="hint">Pause, then use Step to inspect one update. The observed leader may change.</p>
+        </section>
         <canvas id="networkContainer" aria-label="Leading car neural network"></canvas>
     </main>
 

@@ -65,11 +65,17 @@ The project has no loss function, target labels, reward-driven update, optimizer
 
 ## Persistence and compatibility
 
-[main.js](../assets/js/main.js) saves the leader's network as JSON under `bestBrain`. Reloading applies a compatible saved model to the first car only. The other cars receive fresh random parameters, so a saved first car may not remain the leader.
+[main.js](../assets/js/main.js) saves the leader's network as JSON under `bestBrain`. Restarting or reloading applies a compatible saved model to the first car only. The other cars receive fresh random parameters, so a saved first car may not remain the leader.
 
 `isValidBrain()` compares the loaded model to a fresh network's expected dimensions. It checks the number of levels, vector and matrix sizes, and finite numeric values. Invalid data or storage access errors leave the fresh model active and show a status message. Validation does not assess driving quality.
 
-Saving serializes activity arrays as well as parameters. Once inference runs, those activity arrays are overwritten using new observations. Removing stored data affects the next startup; it does not reset the active simulation.
+Saving serializes activity arrays as well as parameters. Once inference runs, those activity arrays are overwritten using new observations. Removing stored data affects the next restart or reload; it does not reset the active simulation.
+
+## Inspecting decisions step by step
+
+The **Leader telemetry** panel shows the current leader's ID, damage state, vertical position, and simulation step. Its inputs come from the first level's latest `inputs` array; the four outputs come from the last level's `outputs` array. Inputs are displayed to three decimal places. Those outputs are the controls calculated for the next movement update, rather than the controls that produced the current position.
+
+Pause and use **Step** to follow one update at a time. At step zero, placeholders indicate that no new inference has run, even if the loaded JSON contains activity from a previous run. A damaged car still runs inference but remains motionless. No displayed activity changes the weights or biases.
 
 ## Reading the visualization
 

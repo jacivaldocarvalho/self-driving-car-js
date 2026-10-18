@@ -12,13 +12,15 @@ The road looks infinite, but its border segments run from `y = -1000000` to `y =
 
 ## What happens in one animation frame
 
-The `animate()` function in [main.js](../assets/js/main.js) performs these steps:
+When running, `animate()` in [main.js](../assets/js/main.js) calls `updateSimulation()`, then `renderSimulation()`. An update performs the following steps:
 
 1. Update traffic vehicles first, including their collision polygons.
 2. Update every AI car against the road borders and traffic polygons.
 3. Select the first car whose `y` equals the smallest `y` in the population.
-4. Draw the road, traffic, cars, leader's sensors, and leader's neural network.
-5. Request the next animation frame.
+
+Rendering draws the road, traffic, cars, leader's sensors, and leader's neural network, then refreshes the telemetry panel. `animate()` always requests one next animation callback. While paused, it skips updates and keeps the dash animation frozen, but redraws for layout changes. **Step** performs exactly one update and redraw while remaining paused. **Restart** recreates the population, reloads a valid saved model into the first car, and resets the step counter without changing the pause mode or creating another callback loop.
+
+The constructor now creates each car's initial polygon, so drawing a paused step-zero state does not require movement. At step zero, sensors and inference have not run; telemetry shows `—`, and the network canvas displays a prompt instead of stale saved activity.
 
 Inside `Car.update()`, an undamaged car moves using its existing controls, builds its polygon, and checks damage. Its sensors then read the environment, and its network calculates controls for the next update. The first movement update therefore uses the initially false AI controls. Damaged cars keep updating sensors and inference, but their movement and polygon stop updating.
 
@@ -57,7 +59,7 @@ y_next = y - cos(angle) * speed
 
 At `angle = 0`, these equations leave `x` unchanged and reduce `y` for a positive speed. Angles are in radians and distances are canvas units, not calibrated physical measurements.
 
-Movement uses fixed increments per animation callback. The timestamp is used for the network's dashed-line animation, not for a physics time step. Consequently, changing callback frequency can change the simulated motion per second. The browser schedules callbacks around repainting and may pause them in background tabs; see [MDN's requestAnimationFrame documentation](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame).
+Movement uses fixed increments per simulation update (one per running animation callback, or one per paused **Step**). The timestamp is used for the network's dashed-line animation, not for a physics time step. Consequently, changing callback frequency can change the simulated motion per second. The browser schedules callbacks around repainting and may pause them in background tabs; see [MDN's requestAnimationFrame documentation](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame).
 
 ## Sensor rays
 
